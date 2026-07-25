@@ -37,6 +37,7 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
 import org.keycloak.protocol.oidc.utils.PkceUtils;
@@ -206,6 +207,7 @@ public class AuthorizationCodeGrantType extends OAuth2GrantTypeBase {
 
         String scopeParam = codeData.getScope();
         ClientSessionContext clientSessionCtx = DefaultClientSessionContext.fromClientSessionAndScopeParameter(clientSession, scopeParam, session);
+        AuthenticationEventSnapshotStore.attachGrant(clientSessionCtx, codeData.getOidc4acGrantId());
 
         updateClientSession(clientSession);
         updateUserSessionFromClientAuth(userSession);

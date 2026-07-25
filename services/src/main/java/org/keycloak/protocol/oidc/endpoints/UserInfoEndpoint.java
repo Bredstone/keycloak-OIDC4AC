@@ -67,6 +67,7 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.OIDCProviderConfig;
 import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc.TokenManager.NotBeforeCheck;
 import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.protocol.oidc.encode.TokenContextEncoderProvider;
@@ -323,6 +324,7 @@ public class UserInfoEndpoint {
 
         // Retrieve by access token scope parameter
         ClientSessionContext clientSessionCtx = DefaultClientSessionContext.fromClientSessionAndScopeParameter(clientSession, token.getScope(), session);
+        AuthenticationEventSnapshotStore.attachGrant(clientSessionCtx, token);
 
         AccessToken userInfo = new AccessToken();
 

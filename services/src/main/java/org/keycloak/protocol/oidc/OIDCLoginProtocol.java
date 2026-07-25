@@ -261,7 +261,7 @@ public class OIDCLoginProtocol implements LoginProtocol {
         String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
         clientSessionCtx.setAttribute(OIDCLoginProtocol.NONCE_PARAM, nonce);
 
-        if (hasUnmetEssentialAuthenticationRequirements(authSession, clientSession)) {
+        if (hasUnmetEssentialAuthenticationRequirements(authSession, clientSessionCtx)) {
             redirectUri.addParam(OAuth2Constants.ERROR, OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS);
             redirectUri.addParam(OAuth2Constants.ERROR_DESCRIPTION, OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS_DESCRIPTION);
             new AuthenticationSessionManager(session).removeTabIdInAuthenticationSession(realm, authSession);
@@ -289,7 +289,8 @@ public class OIDCLoginProtocol implements LoginProtocol {
                 authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM),
                 authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM),
                 authSession.getClientNote(OIDCLoginProtocol.DPOP_JKT),
-                userSession.getId());
+                userSession.getId(),
+                clientSessionCtx.getAttribute(AuthenticationEventSnapshotStore.GRANT_ID_ATTRIBUTE, String.class));
 
             code = OAuth2CodeParser.persistCode(session, clientSession, codeData);
             redirectUri.addParam(OAuth2Constants.CODE, code);
@@ -357,14 +358,15 @@ public class OIDCLoginProtocol implements LoginProtocol {
     }
 
     private boolean hasUnmetEssentialAuthenticationRequirements(AuthenticationSessionModel authSession,
-            AuthenticatedClientSessionModel clientSession) {
+            ClientSessionContext clientSessionContext) {
         if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)) {
             return false;
         }
         try {
             return !new AmrDetailsRequirementsEvaluator(Clock.systemUTC()).essentialRequirementsSatisfied(
                     AmrDetailsRequestParser.parseClaimsParameter(authSession.getClientNote(OIDCLoginProtocol.CLAIMS_PARAM)),
-                    AuthenticationEventSnapshotStore.client(clientSession));
+                    AuthenticationEventSnapshotStore.grant(session, clientSessionContext)
+                            .map(org.keycloak.protocol.oidc4ac.event.AuthenticationEventGrantSnapshot::event));
         } catch (AmrDetailsRequestException e) {
             // The authorization endpoint validator has already rejected malformed requests.
             return true;

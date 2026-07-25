@@ -23,6 +23,9 @@ public final class OIDC4ACConstants {
     public static final String UNMET_AUTHENTICATION_REQUIREMENTS = "unmet_authentication_requirements";
     public static final String UNMET_AUTHENTICATION_REQUIREMENTS_DESCRIPTION = "Authentication requirements could not be satisfied";
 
+    /** Private, opaque binding between an issued bearer/refresh token and its grant snapshot. */
+    public static final String GRANT_ID = "oidc4ac_grant_id";
+
     private OIDC4ACConstants() {
     }
 }

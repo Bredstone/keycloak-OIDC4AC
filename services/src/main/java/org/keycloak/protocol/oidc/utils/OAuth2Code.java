@@ -41,6 +41,7 @@ public class OAuth2Code {
     private static final String CODE_CHALLENGE_METHOD_NOTE = "code_challenge_method";
     private static final String DPOP_JKT_NOTE = "dpop_jkt";
     public static final String USER_SESSION_ID_NOTE = "user_session_id";
+    private static final String OIDC4AC_GRANT_ID_NOTE = "oidc4ac_grant_id";
 
     private final String id;
 
@@ -60,6 +61,8 @@ public class OAuth2Code {
 
     private final String userSessionId;
 
+    private final String oidc4acGrantId;
+
 
     public OAuth2Code(String id, int expiration, String nonce, String scope, String userSessionId) {
         this.id = id;
@@ -72,10 +75,16 @@ public class OAuth2Code {
         this.codeChallengeMethod = null;
         this.dpopJkt = null;
         this.userSessionId = userSessionId;
+        this.oidc4acGrantId = null;
     }
 
     public OAuth2Code(String id, int expiration, String nonce, String scope, String resource, String redirectUriParam,
                       String codeChallenge, String codeChallengeMethod, String dpopJkt, String userSessionId) {
+        this(id, expiration, nonce, scope, resource, redirectUriParam, codeChallenge, codeChallengeMethod, dpopJkt, userSessionId, null);
+    }
+
+    public OAuth2Code(String id, int expiration, String nonce, String scope, String resource, String redirectUriParam,
+                      String codeChallenge, String codeChallengeMethod, String dpopJkt, String userSessionId, String oidc4acGrantId) {
         this.id = id;
         this.expiration = expiration;
         this.nonce = nonce;
@@ -86,6 +95,7 @@ public class OAuth2Code {
         this.codeChallengeMethod = codeChallengeMethod;
         this.dpopJkt = dpopJkt;
         this.userSessionId = userSessionId;
+        this.oidc4acGrantId = oidc4acGrantId;
     }
 
     private OAuth2Code(Map<String, String> data) {
@@ -99,6 +109,7 @@ public class OAuth2Code {
         codeChallengeMethod = data.get(CODE_CHALLENGE_METHOD_NOTE);
         dpopJkt = data.get(DPOP_JKT_NOTE);
         userSessionId = data.get(USER_SESSION_ID_NOTE);
+        oidc4acGrantId = data.get(OIDC4AC_GRANT_ID_NOTE);
     }
 
 
@@ -120,6 +131,7 @@ public class OAuth2Code {
         result.put(CODE_CHALLENGE_METHOD_NOTE, codeChallengeMethod);
         result.put(DPOP_JKT_NOTE, dpopJkt);
         result.put(USER_SESSION_ID_NOTE, userSessionId);
+        result.put(OIDC4AC_GRANT_ID_NOTE, oidc4acGrantId);
 
         return result;
     }
@@ -162,5 +174,9 @@ public class OAuth2Code {
 
     public String getUserSessionId() {
         return userSessionId;
+    }
+
+    public String getOidc4acGrantId() {
+        return oidc4acGrantId;
     }
 }

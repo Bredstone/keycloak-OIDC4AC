@@ -38,6 +38,7 @@ import org.keycloak.organization.protocol.mappers.oidc.OrganizationScope;
 import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AuthorizationDetailsJSONRepresentation;
 import org.keycloak.representations.RefreshToken;
@@ -116,6 +117,7 @@ public abstract class AbstractRefreshTokenProvider implements RefreshTokenProvid
         if (oldRefreshToken.getNonce() != null) {
             clientSessionCtx.setAttribute(OIDCLoginProtocol.NONCE_PARAM, oldRefreshToken.getNonce());
         }
+        AuthenticationEventSnapshotStore.attachGrant(clientSessionCtx, oldRefreshToken);
         clientSessionCtx.setAttribute(Constants.GRANT_TYPE, OAuth2Constants.REFRESH_TOKEN);
 
         // recreate token.

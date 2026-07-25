@@ -23,9 +23,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.keycloak.common.Profile;
-import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientSessionContext;
-import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oidc4ac.OIDC4ACConstants;
 import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
@@ -39,36 +38,36 @@ public final class AmrDetailsDeliveryService {
     private AmrDetailsDeliveryService() {
     }
 
-    public static void applyToIdToken(JsonWebToken token, ClientSessionContext clientSessionContext) {
-        apply(token, clientSessionContext, true);
+    public static void applyToIdToken(KeycloakSession session, JsonWebToken token, ClientSessionContext clientSessionContext) {
+        apply(session, token, clientSessionContext, true);
     }
 
-    public static void applyToUserInfo(JsonWebToken token, ClientSessionContext clientSessionContext) {
-        apply(token, clientSessionContext, false);
+    public static void applyToUserInfo(KeycloakSession session, JsonWebToken token, ClientSessionContext clientSessionContext) {
+        apply(session, token, clientSessionContext, false);
     }
 
-    private static void apply(JsonWebToken token, ClientSessionContext clientSessionContext, boolean idToken) {
+    private static void apply(KeycloakSession session, JsonWebToken token, ClientSessionContext clientSessionContext, boolean idToken) {
         if (!Profile.isFeatureEnabled(Profile.Feature.OIDC4AC)) {
             return;
         }
-        AuthenticatedClientSessionModel clientSession = clientSessionContext.getClientSession();
-        Optional<AmrDetailsClaimRequest> request;
-        try {
-            request = idToken
-                    ? AmrDetailsRequestParser.parseClaimsParameter(clientSession.getNote(OIDCLoginProtocol.CLAIMS_PARAM)).idToken()
-                    : AmrDetailsRequestParser.parseClaimsParameter(clientSession.getNote(OIDCLoginProtocol.CLAIMS_PARAM)).userInfo();
-        } catch (AmrDetailsRequestException e) {
-            return;
-        }
-        if (request.isEmpty()) {
-            return;
-        }
-
-        AuthenticationEventSnapshotStore.client(clientSession).ifPresent(event -> {
-            List<java.util.Map<String, Object>> details = AmrDetailsProjection.project(request.orElseThrow(), event);
+        AuthenticationEventSnapshotStore.grant(session, clientSessionContext).ifPresent(snapshot -> {
+            Optional<AmrDetailsClaimRequest> request = parseRequest(snapshot.claims(), idToken);
+            if (request.isEmpty()) {
+                return;
+            }
+            List<java.util.Map<String, Object>> details = AmrDetailsProjection.project(request.orElseThrow(), snapshot.event());
             token.setOtherClaims(OIDC4ACConstants.AMR_DETAILS, details);
             ensureAmrContainsDetails(token, details);
         });
+    }
+
+    private static Optional<AmrDetailsClaimRequest> parseRequest(Optional<String> claims, boolean idToken) {
+        try {
+            var request = AmrDetailsRequestParser.parseClaimsParameter(claims.orElse(null));
+            return idToken ? request.idToken() : request.userInfo();
+        } catch (AmrDetailsRequestException e) {
+            return Optional.empty();
+        }
     }
 
     private static void ensureAmrContainsDetails(JsonWebToken token, List<java.util.Map<String, Object>> details) {

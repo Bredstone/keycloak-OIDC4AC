@@ -110,6 +110,7 @@ import org.keycloak.protocol.oidc.scope.ParameterizedScopeTypeProvider;
 import org.keycloak.protocol.oidc.token.TokenPostProcessor;
 import org.keycloak.protocol.oidc.token.TokenPostProcessorContext;
 import org.keycloak.protocol.oidc4ac.delivery.AmrDetailsDeliveryService;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OIDCResponseType;
 import org.keycloak.rar.AuthorizationDetails;
@@ -867,7 +868,7 @@ public class TokenManager {
                         return ((UserInfoTokenMapper) mapper.getValue()).transformUserInfoToken(token, mapper.getKey(), session, userSession, clientSessionCtx);
                     }
                 });
-        AmrDetailsDeliveryService.applyToUserInfo(transformed, clientSessionCtx);
+        AmrDetailsDeliveryService.applyToUserInfo(session, transformed, clientSessionCtx);
         return transformed;
     }
 
@@ -1019,7 +1020,7 @@ public class TokenManager {
                         return ((OIDCIDTokenMapper) mapper.getValue()).transformIDToken(token, mapper.getKey(), session, userSession, clientSessionCtx);
                     }
                 });
-        AmrDetailsDeliveryService.applyToIdToken(transformed, clientSessionCtx);
+        AmrDetailsDeliveryService.applyToIdToken(session, transformed, clientSessionCtx);
         return transformed;
     }
 
@@ -1053,6 +1054,7 @@ public class TokenManager {
         boolean offlineTokenRequested = offlineAccessScope == null ? false
                 : clientSessionCtx.getClientScopeIds().contains(offlineAccessScope.getId());
         token.exp(getTokenExpiration(realm, client, userSession, clientSession, offlineTokenRequested));
+        AuthenticationEventSnapshotStore.bindToken(token, clientSessionCtx);
 
         // Tracing
         var tracing = session.getProvider(TracingProvider.class);
@@ -1233,6 +1235,7 @@ public class TokenManager {
                 if (oldRefreshToken.getNonce() != null) {
                     clientSessionCtx.setAttribute(OIDCLoginProtocol.NONCE_PARAM, oldRefreshToken.getNonce());
                 }
+                AuthenticationEventSnapshotStore.attachGrant(clientSessionCtx, oldRefreshToken);
             }
             generateRefreshToken(offlineTokenRequested);
             if (realm.isRevokeRefreshToken()) {
@@ -1261,6 +1264,7 @@ public class TokenManager {
                     });
 
             refreshToken = refreshTokenProvider.generateRefreshToken(initialRefreshTokenContext);
+            AuthenticationEventSnapshotStore.bindToken(refreshToken, accessToken);
 
             Boolean bindOnlyRefreshToken = session.getAttributeOrDefault(DPoPUtil.DPOP_BINDING_ONLY_REFRESH_TOKEN_SESSION_ATTRIBUTE, false);
             if (bindOnlyRefreshToken) {
