@@ -42,3 +42,4 @@ org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointCheckSpi
 org.keycloak.protocol.oidc.rar.AuthorizationDetailsProcessorSpi
 org.keycloak.protocol.oauth2.cimd.provider.ClientIdMetadataDocumentProviderSpi
 org.keycloak.protocol.oidc.token.TokenInterceptorSpi
+org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsSpi

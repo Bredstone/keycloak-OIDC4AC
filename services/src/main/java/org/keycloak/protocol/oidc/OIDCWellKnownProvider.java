@@ -55,6 +55,7 @@ import org.keycloak.protocol.oidc.par.endpoints.ParEndpoint;
 import org.keycloak.protocol.oidc.rar.AuthorizationDetailsProcessor;
 import org.keycloak.protocol.oidc.representations.MTLSEndpointAliases;
 import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
+import org.keycloak.protocol.oidc4ac.discovery.OIDC4ACDiscoveryMetadata;
 import org.keycloak.protocol.oidc.utils.AcrUtils;
 import org.keycloak.protocol.oidc.utils.OIDCResponseType;
 import org.keycloak.provider.Provider;
@@ -175,6 +176,7 @@ public class OIDCWellKnownProvider implements WellKnownProvider {
         config.setClaimsSupported(DEFAULT_CLAIMS_SUPPORTED);
         config.setClaimTypesSupported(DEFAULT_CLAIM_TYPES_SUPPORTED);
         config.setClaimsParameterSupported(true);
+        OIDC4ACDiscoveryMetadata.apply(config, session);
 
         // Include client scopes can be disabled in the environments with thousands of client scopes to avoid potentially expensive iteration over client scopes
         if (includeClientScopes) {

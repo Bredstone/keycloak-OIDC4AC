@@ -101,6 +101,7 @@ import org.keycloak.protocol.oidc.BackchannelLogoutResponse;
 import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.protocol.oidc.encode.TokenContextEncoderProvider;
 import org.keycloak.rar.AuthorizationDetails;
@@ -990,6 +991,10 @@ public class AuthenticationManager {
 
         // The user has successfully logged in and we can clear his/her previous login failure attempts.
         logSuccess(session, authSession);
+
+        if (Profile.isFeatureEnabled(Profile.Feature.OIDC4AC) && OIDCLoginProtocol.LOGIN_PROTOCOL.equals(authSession.getProtocol())) {
+            AuthenticationEventSnapshotStore.persist(authSession, userSession, clientSession);
+        }
 
         return protocol.authenticated(authSession, userSession, clientSessionCtx);
     }

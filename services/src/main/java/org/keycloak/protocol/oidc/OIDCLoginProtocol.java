@@ -18,6 +18,7 @@ package org.keycloak.protocol.oidc;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Clock;
 import java.util.Optional;
 
 import jakarta.ws.rs.core.HttpHeaders;
@@ -51,6 +52,12 @@ import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointChecker;
 import org.keycloak.protocol.oidc.endpoints.request.AuthorizationEndpointRequest;
 import org.keycloak.protocol.oidc.endpoints.request.AuthorizationEndpointRequestParserProcessor;
+import org.keycloak.protocol.oidc4ac.OIDC4ACConstants;
+import org.keycloak.protocol.oidc4ac.evaluation.AmrDetailsRequirementsEvaluator;
+import org.keycloak.protocol.oidc4ac.evaluation.AuthenticationRequirementsPlanner;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
+import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
+import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
 import org.keycloak.protocol.oidc.endpoints.request.RequestUriType;
 import org.keycloak.protocol.oidc.par.endpoints.request.AuthzEndpointParParser;
 import org.keycloak.protocol.oidc.utils.LogoutUtil;
@@ -254,6 +261,13 @@ public class OIDCLoginProtocol implements LoginProtocol {
         String nonce = authSession.getClientNote(OIDCLoginProtocol.NONCE_PARAM);
         clientSessionCtx.setAttribute(OIDCLoginProtocol.NONCE_PARAM, nonce);
 
+        if (hasUnmetEssentialAuthenticationRequirements(authSession, clientSession)) {
+            redirectUri.addParam(OAuth2Constants.ERROR, OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS);
+            redirectUri.addParam(OAuth2Constants.ERROR_DESCRIPTION, OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS_DESCRIPTION);
+            new AuthenticationSessionManager(session).removeTabIdInAuthenticationSession(realm, authSession);
+            return buildRedirectUri(redirectUri, authSession, userSession, clientSessionCtx);
+        }
+
         String kcActionStatus = authSession.getClientNote(Constants.KC_ACTION_STATUS);
         if (kcActionStatus != null) {
             String requiredActionAlias = authSession.getAuthNote(AuthenticationProcessor.LAST_PROCESSED_EXECUTION);
@@ -342,6 +356,21 @@ public class OIDCLoginProtocol implements LoginProtocol {
         return buildRedirectUri(redirectUri, authSession, userSession, clientSessionCtx);
     }
 
+    private boolean hasUnmetEssentialAuthenticationRequirements(AuthenticationSessionModel authSession,
+            AuthenticatedClientSessionModel clientSession) {
+        if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)) {
+            return false;
+        }
+        try {
+            return !new AmrDetailsRequirementsEvaluator(Clock.systemUTC()).essentialRequirementsSatisfied(
+                    AmrDetailsRequestParser.parseClaimsParameter(authSession.getClientNote(OIDCLoginProtocol.CLAIMS_PARAM)),
+                    AuthenticationEventSnapshotStore.client(clientSession));
+        } catch (AmrDetailsRequestException e) {
+            // The authorization endpoint validator has already rejected malformed requests.
+            return true;
+        }
+    }
+
     /**
      * this method can be used in extension-implementations to the {@link OIDCLoginProtocol} to add additional
      * parameters to the redirectUri after successful authentication and to store these e.g. in the clientSession
@@ -394,6 +423,30 @@ public class OIDCLoginProtocol implements LoginProtocol {
         new AuthenticationSessionManager(session).removeTabIdInAuthenticationSession(realm, authSession);
 
         return buildRedirectUri(redirectUri, authSession, null, null, null, error);
+    }
+
+    /**
+     * Error bridge for an essential OIDC4AC requirement that terminates the
+     * browser flow before an authenticated client session exists.
+     */
+    public Response sendUnmetAuthenticationRequirements(AuthenticationSessionModel authSession) {
+        String responseTypeParam = authSession.getClientNote(OIDCLoginProtocol.RESPONSE_TYPE_PARAM);
+        String responseModeParam = authSession.getClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM);
+        setupResponseTypeAndMode(responseTypeParam, responseModeParam);
+
+        OIDCRedirectUriBuilder redirectUri = OIDCRedirectUriBuilder.fromUri(authSession.getRedirectUri(), responseMode, session, null)
+                .addParam(OAuth2Constants.ERROR, OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS)
+                .addParam(OAuth2Constants.ERROR_DESCRIPTION, OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS_DESCRIPTION);
+        String state = authSession.getClientNote(OIDCLoginProtocol.STATE_PARAM);
+        if (state != null) {
+            redirectUri.addParam(OAuth2Constants.STATE, state);
+        }
+        OIDCAdvancedConfigWrapper clientConfig = OIDCAdvancedConfigWrapper.fromClientModel(authSession.getClient());
+        if (!clientConfig.isExcludeIssuerFromAuthResponse()) {
+            redirectUri.addParam(OAuth2Constants.ISSUER, Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName()));
+        }
+        new AuthenticationSessionManager(session).removeTabIdInAuthenticationSession(realm, authSession);
+        return buildRedirectUri(redirectUri, authSession, null, null, null, null);
     }
 
     private OIDCRedirectUriBuilder buildErrorRedirectUri(String redirect, String state, Error error, String errorMessage) {
@@ -517,7 +570,23 @@ public class OIDCLoginProtocol implements LoginProtocol {
 
     @Override
     public boolean requireReauthentication(UserSessionModel userSession, AuthenticationSessionModel authSession) {
-        return isPromptLogin(authSession) || isAuthTimeExpired(userSession, authSession) || isReAuthRequiredForKcAction(userSession, authSession);
+        if (isPromptLogin(authSession) || isAuthTimeExpired(userSession, authSession) || isReAuthRequiredForKcAction(userSession, authSession)) {
+            return true;
+        }
+        if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)) {
+            return false;
+        }
+        if (userSession == null) {
+            return false;
+        }
+        try {
+            return new AuthenticationRequirementsPlanner(Clock.systemUTC()).shouldForceBrowserReauthentication(
+                    AmrDetailsRequestParser.parseClaimsParameter(authSession.getClientNote(OIDCLoginProtocol.CLAIMS_PARAM)),
+                    AuthenticationEventSnapshotStore.sso(userSession));
+        } catch (AmrDetailsRequestException e) {
+            // The authorization endpoint validator rejects malformed requests before cookie authentication.
+            return false;
+        }
     }
 
     protected boolean isPromptLogin(AuthenticationSessionModel authSession) {

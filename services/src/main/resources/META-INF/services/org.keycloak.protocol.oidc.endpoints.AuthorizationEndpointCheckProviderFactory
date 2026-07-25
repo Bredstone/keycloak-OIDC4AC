@@ -18,3 +18,4 @@
 #
 
 org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationCheckProviderFactory
+org.keycloak.protocol.oidc4ac.authorization.OIDC4ACAuthorizationCheckProviderFactory

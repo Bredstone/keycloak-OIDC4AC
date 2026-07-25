@@ -58,6 +58,7 @@ import org.keycloak.models.utils.AuthenticationFlowResolver;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.protocol.ClientData;
 import org.keycloak.protocol.LoginProtocol;
+import org.keycloak.protocol.oidc4ac.error.OIDC4ACAuthenticationFailureBridge;
 import org.keycloak.protocol.LoginProtocol.Error;
 import org.keycloak.protocol.RestartLoginCookie;
 import org.keycloak.protocol.oidc.TokenManager;
@@ -346,6 +347,7 @@ public class AuthenticationProcessor {
         List<AuthenticationSelectionOption> authenticationSelections;
         String eventDetails;
         String userErrorMessage;
+        String credentialType;
         Map<Class<?>, Object> state;
 
         private Result(AuthenticationExecutionModel execution, Authenticator authenticator, List<AuthenticationExecutionModel> currentExecutions) {
@@ -416,10 +418,15 @@ public class AuthenticationProcessor {
 
         @Override
         public void success(String credentialType) {
+            this.credentialType = credentialType;
             if (credentialType != null) {
                 AuthenticatorUtil.addAuthCredential(getAuthenticationSession(), credentialType);
             }
             this.status = FlowStatus.SUCCESS;
+        }
+
+        public String getCredentialType() {
+            return credentialType;
         }
 
         @Override
@@ -784,6 +791,10 @@ public class AuthenticationProcessor {
     }
 
     public Response handleBrowserExceptionList(AuthenticationFlowException e) {
+        java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session, authenticationSession, e);
+        if (oidc4acResponse.isPresent()) {
+            return oidc4acResponse.get();
+        }
         LoginFormsProvider forms = session.getProvider(LoginFormsProvider.class).setAuthenticationSession(authenticationSession);
         ServicesLogger.LOGGER.failedAuthentication(e);
         forms.addError(new FormMessage(Messages.UNEXPECTED_ERROR_HANDLING_REQUEST));
@@ -826,6 +837,10 @@ public class AuthenticationProcessor {
     public Response handleBrowserException(Exception failure) {
         if (failure instanceof AuthenticationFlowException) {
             AuthenticationFlowException e = (AuthenticationFlowException) failure;
+            java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session, authenticationSession, e);
+            if (oidc4acResponse.isPresent()) {
+                return oidc4acResponse.get();
+            }
             if (e.getAfeList() != null && !e.getAfeList().isEmpty()){
                 return handleBrowserExceptionList(e);
             }

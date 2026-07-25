@@ -34,6 +34,7 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.authentication.authenticators.conditional.ConditionalAuthenticator;
 import org.keycloak.authentication.authenticators.util.AuthenticatorUtils;
+import org.keycloak.protocol.oidc4ac.event.AuthenticationMethodDetailsRecorder;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.Constants;
@@ -532,6 +533,7 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
                 logger.debugv("authenticator SUCCESS: {0}", execution.getAuthenticator());
                 setExecutionStatus(execution, AuthenticationSessionModel.ExecutionStatus.SUCCESS);
                 AuthenticatorUtils.updateCompletedExecutions(processor.getAuthenticationSession(), processor.getUserSession(), execution.getId());
+                AuthenticationMethodDetailsRecorder.record(processor, result);
                 return null;
             case FAILED:
                 logger.debugv("authenticator FAILED: {0}", execution.getAuthenticator());
