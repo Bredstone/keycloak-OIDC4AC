@@ -34,6 +34,8 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.authentication.authenticators.conditional.ConditionalAuthenticator;
 import org.keycloak.authentication.authenticators.util.AuthenticatorUtils;
+import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlan;
+import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanStore;
 import org.keycloak.protocol.oidc4ac.event.AuthenticationMethodDetailsRecorder;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -224,6 +226,21 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
             AuthenticationExecutionModel parentFlowExecutionModel = processor.getRealm().getAuthenticationExecutionByFlowId(model.getParentFlow());
 
             if (parentFlowExecutionModel != null) {
+                java.util.Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
+                        .forFlow(processor.getAuthenticationSession(), model.getParentFlow());
+                if (factorPlan.isPresent()) {
+                    boolean allPlannedFactorsSucceeded = factorPlan.orElseThrow().executionIds().stream().allMatch(executionId -> {
+                        AuthenticationExecutionModel plannedExecution = processor.getRealm().getAuthenticationExecutionById(executionId);
+                        return plannedExecution != null && processor.isSuccessful(plannedExecution);
+                    });
+                    if (allPlannedFactorsSucceeded) {
+                        logger.debugf("OIDC4AC factor flow '%s' successfully finished", logExecutionAlias(parentFlowExecutionModel));
+                        setExecutionStatus(parentFlowExecutionModel, AuthenticationSessionModel.ExecutionStatus.SUCCESS);
+                        model = parentFlowExecutionModel;
+                        continue;
+                    }
+                    return model.getParentFlow();
+                }
                 List<AuthenticationExecutionModel> requiredExecutions = new LinkedList<>();
                 List<AuthenticationExecutionModel> alternativeExecutions = new LinkedList<>();
                 fillListsOfExecutions(processor.getRealm().getAuthenticationExecutionsStream(model.getParentFlow()),
@@ -273,6 +290,12 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
                     return createSelectAuthenticatorsScreen(executionModel);
                 }
             }
+        }
+
+        java.util.Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
+                .forFlow(processor.getAuthenticationSession(), flow.getId());
+        if (factorPlan.isPresent()) {
+            return processOidc4acFactorPlan(factorPlan.orElseThrow());
         }
 
         //separate flow elements into required and alternative elements
@@ -333,6 +356,31 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
             }
         }
         return null;
+    }
+
+    /**
+     * An opt-in OIDC4AC factor container has alternative child subflows in the
+     * realm model. Its server-side plan turns the selected children into an
+     * ordered required sequence without changing that shared model.
+     */
+    private Response processOidc4acFactorPlan(AuthenticationFactorPlan factorPlan) {
+        for (String executionId : factorPlan.executionIds()) {
+            AuthenticationExecutionModel factor = executions.stream()
+                    .filter(execution -> executionId.equals(execution.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR));
+            if (!factor.isAuthenticatorFlow() || !factor.isAlternative()) {
+                throw new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR);
+            }
+            Response response = processSingleFlowExecutionModel(factor, true);
+            if (response != null) {
+                return response;
+            }
+            if (!processor.isSuccessful(factor) && !isSetupRequired(factor)) {
+                return null;
+            }
+        }
+        return onFlowExecutionsSuccessful();
     }
 
 
