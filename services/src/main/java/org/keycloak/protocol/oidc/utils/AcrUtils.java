@@ -37,6 +37,7 @@ import org.keycloak.representations.ClaimsRepresentation;
 import org.keycloak.representations.IDToken;
 import org.keycloak.util.JsonSerialization;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.jboss.logging.Logger;
 
@@ -112,11 +113,14 @@ public class AcrUtils {
         }
         if (claimsParam != null) {
             try {
-                ClaimsRepresentation claims = JsonSerialization.readValue(claimsParam, ClaimsRepresentation.class);
-                if (claims == null) {
+                JsonNode claims = JsonSerialization.mapper.readTree(claimsParam);
+                if (claims == null || !claims.isObject()) {
                     LOGGER.warnf("Invalid claims parameter. Claims parameter should be JSON");
                 } else {
-                    ClaimsRepresentation.ClaimValue<String> acrClaim = claims.getClaimValue(IDToken.ACR, ClaimsRepresentation.ClaimContext.ID_TOKEN, String.class);
+                    JsonNode idTokenClaims = claims.get("id_token");
+                    JsonNode acr = idTokenClaims == null || !idTokenClaims.isObject() ? null : idTokenClaims.get(IDToken.ACR);
+                    ClaimsRepresentation.ClaimValue<String> acrClaim = acr == null || acr.isNull() ? null
+                            : JsonSerialization.mapper.treeToValue(acr, ClaimsRepresentation.ClaimValue.class);
                     if (acrClaim != null) {
                         if (!essential || acrClaim.isEssential()) {
                             if (acrClaim.getValues() != null) {
