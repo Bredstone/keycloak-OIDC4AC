@@ -19,19 +19,13 @@ package org.keycloak.protocol.oidc4ac.flow;
 import java.util.List;
 import java.util.Objects;
 
-/** A server-side, request-scoped collection of ordered fallback branches. */
-public record AuthenticationFactorPlan(String factorFlowId, List<AuthenticationFactorPlanStep> steps) {
+/** An expression requirement with one or more safe fallback branches. */
+public record AuthenticationFactorPlanStep(List<AuthenticationFactorPlanBranch> branches) {
 
-    public AuthenticationFactorPlan {
-        factorFlowId = nonBlank(factorFlowId, "factorFlowId");
-        steps = List.copyOf(Objects.requireNonNull(steps, "steps"));
-    }
-
-    private static String nonBlank(String value, String name) {
-        Objects.requireNonNull(value, name);
-        if (value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+    public AuthenticationFactorPlanStep {
+        branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
+        if (branches.isEmpty()) {
+            throw new IllegalArgumentException("branches must not be empty");
         }
-        return value;
     }
 }

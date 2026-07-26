@@ -16,22 +16,20 @@
  */
 package org.keycloak.protocol.oidc4ac.flow;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
-/** A server-side, request-scoped collection of ordered fallback branches. */
-public record AuthenticationFactorPlan(String factorFlowId, List<AuthenticationFactorPlanStep> steps) {
+/** One realm-policy ordered way to satisfy an expression. */
+public record AuthenticationFactorPlanBranch(List<String> executionIds) {
 
-    public AuthenticationFactorPlan {
-        factorFlowId = nonBlank(factorFlowId, "factorFlowId");
-        steps = List.copyOf(Objects.requireNonNull(steps, "steps"));
-    }
-
-    private static String nonBlank(String value, String name) {
-        Objects.requireNonNull(value, name);
-        if (value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+    public AuthenticationFactorPlanBranch {
+        executionIds = List.copyOf(Objects.requireNonNull(executionIds, "executionIds"));
+        if (executionIds.isEmpty() || executionIds.stream().anyMatch(value -> value == null || value.isBlank())) {
+            throw new IllegalArgumentException("executionIds must contain non-blank values");
         }
-        return value;
+        if (new LinkedHashSet<>(executionIds).size() != executionIds.size()) {
+            throw new IllegalArgumentException("executionIds must not contain duplicates");
+        }
     }
 }

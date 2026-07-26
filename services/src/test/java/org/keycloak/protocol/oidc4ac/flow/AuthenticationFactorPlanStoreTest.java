@@ -35,14 +35,36 @@ public class AuthenticationFactorPlanStoreTest {
         Map<String, String> notes = new HashMap<>();
         AuthenticationSessionModel session = session(notes);
 
-        AuthenticationFactorPlan first = new AuthenticationFactorPlan("factor-container", List.of("pwd", "otp"));
-        AuthenticationFactorPlan second = new AuthenticationFactorPlan("another-container", List.of("email"));
+        AuthenticationFactorPlan first = plan("factor-container", "pwd", "otp");
+        AuthenticationFactorPlan second = plan("another-container", "email");
 
         assertEquals(first, AuthenticationFactorPlanStore.storeIfAbsent(session, first));
         assertEquals(first, AuthenticationFactorPlanStore.storeIfAbsent(session, second));
         assertEquals(first, AuthenticationFactorPlanStore.forFlow(session, "factor-container").orElseThrow());
         assertTrue(AuthenticationFactorPlanStore.forFlow(session, "another-container").isEmpty());
         assertFalse(notes.isEmpty());
+    }
+
+    @Test
+    public void progressMovesOnlyToTheNextPreplannedBranch() {
+        Map<String, String> notes = new HashMap<>();
+        AuthenticationSessionModel session = session(notes);
+        AuthenticationFactorPlan plan = new AuthenticationFactorPlan("factor-container", List.of(new AuthenticationFactorPlanStep(List.of(
+                new AuthenticationFactorPlanBranch(List.of("pop")),
+                new AuthenticationFactorPlanBranch(List.of("email"))))));
+
+        AuthenticationFactorPlanStore.storeIfAbsent(session, plan);
+        AuthenticationFactorPlanStore.setCurrentExecution(session, plan, 0, 0, "pop");
+
+        assertEquals(0, AuthenticationFactorPlanStore.activeBranch(session, plan, 0));
+        assertTrue(AuthenticationFactorPlanStore.advanceBranch(session, plan, 0));
+        assertEquals(1, AuthenticationFactorPlanStore.activeBranch(session, plan, 0));
+        assertFalse(AuthenticationFactorPlanStore.advanceBranch(session, plan, 0));
+    }
+
+    private static AuthenticationFactorPlan plan(String flowId, String... executions) {
+        return new AuthenticationFactorPlan(flowId, List.of(new AuthenticationFactorPlanStep(List.of(
+                new AuthenticationFactorPlanBranch(List.of(executions))))));
     }
 
     @SuppressWarnings("unchecked")

@@ -16,22 +16,15 @@
  */
 package org.keycloak.protocol.oidc4ac.flow;
 
-import java.util.List;
 import java.util.Objects;
 
-/** A server-side, request-scoped collection of ordered fallback branches. */
-public record AuthenticationFactorPlan(String factorFlowId, List<AuthenticationFactorPlanStep> steps) {
+/** Mutable server-side cursor for an otherwise immutable factor plan. */
+public record AuthenticationFactorPlanProgress(String factorFlowId, int stepIndex, int branchIndex, String executionId) {
 
-    public AuthenticationFactorPlan {
-        factorFlowId = nonBlank(factorFlowId, "factorFlowId");
-        steps = List.copyOf(Objects.requireNonNull(steps, "steps"));
-    }
-
-    private static String nonBlank(String value, String name) {
-        Objects.requireNonNull(value, name);
-        if (value.isBlank()) {
-            throw new IllegalArgumentException(name + " must not be blank");
+    public AuthenticationFactorPlanProgress {
+        factorFlowId = Objects.requireNonNull(factorFlowId, "factorFlowId");
+        if (factorFlowId.isBlank() || stepIndex < 0 || branchIndex < 0) {
+            throw new IllegalArgumentException("A factor-plan progress cursor is invalid");
         }
-        return value;
     }
 }

@@ -46,7 +46,7 @@ public class AuthenticationFactorPlanPlannerTest {
                 binding("pwd-flow", "pwd", 10)));
 
         assertFalse(result.essentialRequirementsUnplannable());
-        assertEquals(List.of("pwd-flow", "pop-flow", "otp-flow", "email-flow"), result.plan().executionIds());
+        assertEquals(List.of("pwd-flow", "pop-flow", "otp-flow", "email-flow"), firstBranch(result).executionIds());
     }
 
     @Test
@@ -69,7 +69,8 @@ public class AuthenticationFactorPlanPlannerTest {
                 binding("email-flow", "email", 40)));
 
         assertFalse(result.essentialRequirementsUnplannable());
-        assertEquals(List.of("pwd-flow", "pop-flow"), result.plan().executionIds());
+        assertEquals(List.of("pwd-flow", "pop-flow"), firstBranch(result).executionIds());
+        assertEquals(List.of("pwd-flow", "otp-flow", "email-flow"), result.plan().steps().get(0).branches().get(1).executionIds());
     }
 
     @Test
@@ -80,7 +81,7 @@ public class AuthenticationFactorPlanPlannerTest {
                 """), "factors", List.of(binding("pwd-flow", "pwd", 10)));
 
         assertTrue(result.essentialRequirementsUnplannable());
-        assertTrue(result.plan().executionIds().isEmpty());
+        assertTrue(result.plan().steps().isEmpty());
     }
 
     @Test
@@ -90,7 +91,11 @@ public class AuthenticationFactorPlanPlannerTest {
                 """), "factors", List.of(binding("pwd-flow", "pwd", 10)));
 
         assertFalse(result.essentialRequirementsUnplannable());
-        assertTrue(result.plan().executionIds().isEmpty());
+        assertTrue(result.plan().steps().isEmpty());
+    }
+
+    private static AuthenticationFactorPlanBranch firstBranch(AuthenticationFactorPlanResult result) {
+        return result.plan().steps().get(0).branches().get(0);
     }
 
     private static AuthenticationFactorBinding binding(String executionId, String identifier, int priority) {

@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -34,6 +35,7 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.authentication.authenticators.conditional.ConditionalAuthenticator;
 import org.keycloak.authentication.authenticators.util.AuthenticatorUtils;
+import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorFallbackPolicy;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlan;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanStore;
 import org.keycloak.protocol.oidc4ac.event.AuthenticationMethodDetailsRecorder;
@@ -153,13 +155,21 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         if (model.isAuthenticatorFlow()) {
             logger.debug("execution is flow");
             AuthenticationFlow authenticationFlow = processor.createFlowExecution(model.getFlowId(), model);
-            Response flowChallenge = authenticationFlow.processAction(actionExecution);
-            if (flowChallenge == null) {
-                checkAndValidateParentFlow(model);
-                return processFlow();
-            } else {
-                setExecutionStatus(model, AuthenticationSessionModel.ExecutionStatus.CHALLENGED);
-                return flowChallenge;
+            try {
+                Response flowChallenge = authenticationFlow.processAction(actionExecution);
+                if (flowChallenge == null) {
+                    checkAndValidateParentFlow(model);
+                    return processFlow();
+                } else {
+                    setExecutionStatus(model, AuthenticationSessionModel.ExecutionStatus.CHALLENGED);
+                    return flowChallenge;
+                }
+            } catch (AuthenticationFlowException failure) {
+                Optional<Response> fallback = retryOidc4acFactorBranch(model, failure);
+                if (fallback.isPresent()) {
+                    return fallback.orElseThrow();
+                }
+                throw failure;
             }
         }
 
@@ -174,11 +184,19 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         }
 
         logger.debugv("action: {0}", model.getAuthenticator());
-        authenticator.action(result);
-        Response response = processResult(result, true);
-        if (response == null) {
-            return continueAuthenticationAfterSuccessfulAction(model);
-        } else return response;
+        try {
+            authenticator.action(result);
+            Response response = processResult(result, true);
+            if (response == null) {
+                return continueAuthenticationAfterSuccessfulAction(model);
+            } else return response;
+        } catch (AuthenticationFlowException failure) {
+            Optional<Response> fallback = retryOidc4acFactorBranch(model, failure);
+            if (fallback.isPresent()) {
+                return fallback.orElseThrow();
+            }
+            throw failure;
+        }
     }
 
 
@@ -226,14 +244,10 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
             AuthenticationExecutionModel parentFlowExecutionModel = processor.getRealm().getAuthenticationExecutionByFlowId(model.getParentFlow());
 
             if (parentFlowExecutionModel != null) {
-                java.util.Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
+                Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
                         .forFlow(processor.getAuthenticationSession(), model.getParentFlow());
                 if (factorPlan.isPresent()) {
-                    boolean allPlannedFactorsSucceeded = factorPlan.orElseThrow().executionIds().stream().allMatch(executionId -> {
-                        AuthenticationExecutionModel plannedExecution = processor.getRealm().getAuthenticationExecutionById(executionId);
-                        return plannedExecution != null && processor.isSuccessful(plannedExecution);
-                    });
-                    if (allPlannedFactorsSucceeded) {
+                    if (oidc4acFactorPlanSatisfied(factorPlan.orElseThrow())) {
                         logger.debugf("OIDC4AC factor flow '%s' successfully finished", logExecutionAlias(parentFlowExecutionModel));
                         setExecutionStatus(parentFlowExecutionModel, AuthenticationSessionModel.ExecutionStatus.SUCCESS);
                         model = parentFlowExecutionModel;
@@ -292,7 +306,7 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
             }
         }
 
-        java.util.Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
+        Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
                 .forFlow(processor.getAuthenticationSession(), flow.getId());
         if (factorPlan.isPresent()) {
             return processOidc4acFactorPlan(factorPlan.orElseThrow());
@@ -364,24 +378,133 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
      * ordered required sequence without changing that shared model.
      */
     private Response processOidc4acFactorPlan(AuthenticationFactorPlan factorPlan) {
-        for (String executionId : factorPlan.executionIds()) {
-            AuthenticationExecutionModel factor = executions.stream()
-                    .filter(execution -> executionId.equals(execution.getId()))
-                    .findFirst()
-                    .orElseThrow(() -> new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR));
-            if (!factor.isAuthenticatorFlow() || !factor.isAlternative()) {
-                throw new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR);
-            }
-            Response response = processSingleFlowExecutionModel(factor, true);
-            if (response != null) {
-                return response;
-            }
-            if (!processor.isSuccessful(factor) && !isSetupRequired(factor)) {
-                return null;
+        for (int stepIndex = 0; stepIndex < factorPlan.steps().size(); stepIndex++) {
+            while (true) {
+                int branchIndex = AuthenticationFactorPlanStore.activeBranch(processor.getAuthenticationSession(), factorPlan, stepIndex);
+                if (branchIndex >= factorPlan.steps().get(stepIndex).branches().size()) {
+                    throw new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR);
+                }
+                boolean tryNextBranch = false;
+                for (String executionId : factorPlan.steps().get(stepIndex).branches().get(branchIndex).executionIds()) {
+                    AuthenticationExecutionModel factor = factorExecution(executionId);
+                    if (processor.isSuccessful(factor)) {
+                        continue;
+                    }
+                    AuthenticationFactorPlanStore.setCurrentExecution(processor.getAuthenticationSession(), factorPlan,
+                            stepIndex, branchIndex, executionId);
+                    try {
+                        Response response = processSingleFlowExecutionModel(factor, true);
+                        if (response != null) {
+                            return response;
+                        }
+                    } catch (AuthenticationFlowException failure) {
+                        if (!AuthenticationFactorFallbackPolicy.isRetryable(failure)
+                                || !AuthenticationFactorPlanStore.advanceBranch(processor.getAuthenticationSession(), factorPlan, stepIndex)) {
+                            throw failure;
+                        }
+                        tryNextBranch = true;
+                        break;
+                    }
+                    if (!processor.isSuccessful(factor) && !isSetupRequired(factor)) {
+                        if (!AuthenticationFactorPlanStore.advanceBranch(processor.getAuthenticationSession(), factorPlan, stepIndex)) {
+                            return null;
+                        }
+                        tryNextBranch = true;
+                        break;
+                    }
+                }
+                if (!tryNextBranch) {
+                    break;
+                }
             }
         }
+        AuthenticationFactorPlanStore.clearProgress(processor.getAuthenticationSession());
         return onFlowExecutionsSuccessful();
     }
+
+    private AuthenticationExecutionModel factorExecution(String executionId) {
+        AuthenticationExecutionModel factor = executions.stream()
+                .filter(execution -> executionId.equals(execution.getId()))
+                .findFirst()
+                .orElseThrow(() -> new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR));
+        if (!factor.isAuthenticatorFlow() || !factor.isAlternative()) {
+            throw new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR);
+        }
+        return factor;
+    }
+
+    private boolean oidc4acFactorPlanSatisfied(AuthenticationFactorPlan factorPlan) {
+        return factorPlan.steps().stream().allMatch(step -> step.branches().stream().anyMatch(branch -> branch.executionIds().stream()
+                .map(processor.getRealm()::getAuthenticationExecutionById).allMatch(execution -> execution != null && processor.isSuccessful(execution))));
+    }
+
+    /**
+     * Action submissions bypass {@link #processOidc4acFactorPlan}, so terminal
+     * failures from a challenged factor are redirected here to advance only a
+     * preplanned, non-cancelled fallback branch.
+     */
+    private Optional<Response> retryOidc4acFactorBranch(AuthenticationExecutionModel failedExecution,
+            AuthenticationFlowException failure) {
+        if (!AuthenticationFactorFallbackPolicy.isRetryable(failure)) {
+            return Optional.empty();
+        }
+        Optional<AuthenticationFactorPlan> factorPlan = factorPlanFor(failedExecution);
+        if (factorPlan.isEmpty()) {
+            return Optional.empty();
+        }
+        AuthenticationFactorPlan plan = factorPlan.orElseThrow();
+        Optional<org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanProgress> progress = AuthenticationFactorPlanStore
+                .progress(processor.getAuthenticationSession(), plan);
+        if (progress.isEmpty() || progress.orElseThrow().executionId() == null
+                || !isDescendantOf(failedExecution, progress.orElseThrow().executionId())
+                || progress.orElseThrow().stepIndex() >= plan.steps().size()
+                || !AuthenticationFactorPlanStore.advanceBranch(processor.getAuthenticationSession(), plan,
+                        progress.orElseThrow().stepIndex())) {
+            return Optional.empty();
+        }
+
+        processor.getAuthenticationSession().removeAuthNote(AuthenticationProcessor.CURRENT_AUTHENTICATION_EXECUTION);
+        AuthenticationExecutionModel factorContainer = processor.getRealm().getAuthenticationExecutionByFlowId(plan.factorFlowId());
+        if (factorContainer == null) {
+            return Optional.empty();
+        }
+        Response response = processSingleFlowExecutionModel(factorContainer, false);
+        if (response != null) {
+            return Optional.of(response);
+        }
+        if (processor.isSuccessful(factorContainer)) {
+            return Optional.of(continueAuthenticationAfterSuccessfulAction(factorContainer));
+        }
+        return Optional.empty();
+    }
+
+    private Optional<AuthenticationFactorPlan> factorPlanFor(AuthenticationExecutionModel execution) {
+        AuthenticationExecutionModel current = execution;
+        while (current != null && current.getParentFlow() != null) {
+            Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
+                    .forFlow(processor.getAuthenticationSession(), current.getParentFlow());
+            if (factorPlan.isPresent()) {
+                return factorPlan;
+            }
+            current = processor.getRealm().getAuthenticationExecutionByFlowId(current.getParentFlow());
+        }
+        return Optional.empty();
+    }
+
+    private boolean isDescendantOf(AuthenticationExecutionModel execution, String ancestorExecutionId) {
+        AuthenticationExecutionModel current = execution;
+        while (current != null) {
+            if (ancestorExecutionId.equals(current.getId())) {
+                return true;
+            }
+            if (current.getParentFlow() == null) {
+                return false;
+            }
+            current = processor.getRealm().getAuthenticationExecutionByFlowId(current.getParentFlow());
+        }
+        return false;
+    }
+
 
 
     /**

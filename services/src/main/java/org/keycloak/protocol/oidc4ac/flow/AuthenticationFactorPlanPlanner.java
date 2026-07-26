@@ -21,7 +21,6 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.keycloak.protocol.oidc4ac.request.AllOfExpression;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
@@ -44,7 +43,7 @@ public final class AuthenticationFactorPlanPlanner {
     public AuthenticationFactorPlanResult plan(AmrDetailsClaimsRequest requests, String factorFlowId,
             Collection<AuthenticationFactorBinding> availableBindings) {
         List<AuthenticationFactorBinding> bindings = availableBindings.stream().sorted(POLICY_ORDER).toList();
-        LinkedHashSet<AuthenticationFactorBinding> selected = new LinkedHashSet<>();
+        List<AuthenticationFactorPlanStep> steps = new java.util.ArrayList<>();
         boolean essentialRequirementsUnplannable = false;
 
         for (AmrDetailsClaimRequest request : List.of(requests.idToken(), requests.userInfo()).stream()
@@ -52,54 +51,66 @@ public final class AuthenticationFactorPlanPlanner {
             if (request.expression().isEmpty()) {
                 continue;
             }
-            Optional<Set<AuthenticationFactorBinding>> candidate = select(request.expression().orElseThrow(), bindings);
-            if (candidate.isEmpty()) {
+            List<List<AuthenticationFactorBinding>> branches = branches(request.expression().orElseThrow(), bindings);
+            if (branches.isEmpty()) {
                 essentialRequirementsUnplannable |= request.essential();
             } else {
-                selected.addAll(candidate.orElseThrow());
+                steps.add(new AuthenticationFactorPlanStep(branches.stream().sorted(this::compareBranches)
+                        .map(branch -> new AuthenticationFactorPlanBranch(branch.stream()
+                                .map(AuthenticationFactorBinding::executionId).toList())).toList()));
             }
         }
 
-        List<String> executionIds = selected.stream().sorted(POLICY_ORDER)
-                .map(AuthenticationFactorBinding::executionId).toList();
-        return new AuthenticationFactorPlanResult(new AuthenticationFactorPlan(factorFlowId, executionIds),
+        return new AuthenticationFactorPlanResult(new AuthenticationFactorPlan(factorFlowId, steps),
                 essentialRequirementsUnplannable);
     }
 
-    private Optional<Set<AuthenticationFactorBinding>> select(AuthenticationMethodExpression expression,
+    private List<List<AuthenticationFactorBinding>> branches(AuthenticationMethodExpression expression,
             List<AuthenticationFactorBinding> bindings) {
         if (expression instanceof AllOfExpression allOf) {
-            LinkedHashSet<AuthenticationFactorBinding> result = new LinkedHashSet<>();
+            List<List<AuthenticationFactorBinding>> result = List.of(List.of());
             for (AuthenticationMethodExpression child : allOf.children()) {
-                Optional<Set<AuthenticationFactorBinding>> selectedChild = select(child, bindings);
-                if (selectedChild.isEmpty()) {
-                    return Optional.empty();
+                result = combine(result, branches(child, bindings));
+                if (result.isEmpty()) {
+                    return List.of();
                 }
-                result.addAll(selectedChild.orElseThrow());
             }
-            return Optional.of(Set.copyOf(result));
+            return result;
         }
         if (expression instanceof OneOfExpression oneOf) {
-            return oneOf.children().stream().map(child -> select(child, bindings)).flatMap(Optional::stream)
-                    .min(this::compareBranches);
+            return oneOf.children().stream().flatMap(child -> branches(child, bindings).stream()).distinct().toList();
         }
-        return selectMethod((MethodExpression) expression, bindings);
+        return methodBranches((MethodExpression) expression, bindings);
     }
 
-    private Optional<Set<AuthenticationFactorBinding>> selectMethod(MethodExpression expression,
+    private List<List<AuthenticationFactorBinding>> methodBranches(MethodExpression expression,
             List<AuthenticationFactorBinding> bindings) {
         return bindings.stream()
                 .filter(binding -> expression.identifier().matches(binding.amrIdentifier()))
                 .filter(binding -> expression.properties().entrySet().stream()
                         .filter(entry -> entry.getValue().essential())
                         .allMatch(entry -> binding.propertyNames().contains(entry.getKey())))
-                .findFirst().map(binding -> Set.of(binding));
+                .map(binding -> List.of(binding)).toList();
+    }
+
+    private List<List<AuthenticationFactorBinding>> combine(List<List<AuthenticationFactorBinding>> left,
+            List<List<AuthenticationFactorBinding>> right) {
+        if (left.isEmpty() || right.isEmpty()) {
+            return List.of();
+        }
+        List<List<AuthenticationFactorBinding>> result = new java.util.ArrayList<>();
+        for (List<AuthenticationFactorBinding> leftBranch : left) {
+            for (List<AuthenticationFactorBinding> rightBranch : right) {
+                LinkedHashSet<AuthenticationFactorBinding> merged = new LinkedHashSet<>(leftBranch);
+                merged.addAll(rightBranch);
+                result.add(merged.stream().sorted(POLICY_ORDER).toList());
+            }
+        }
+        return result.stream().distinct().toList();
     }
 
     /** A lower realm priority wins; factor count and IDs make the choice deterministic. */
-    private int compareBranches(Set<AuthenticationFactorBinding> first, Set<AuthenticationFactorBinding> second) {
-        List<AuthenticationFactorBinding> left = first.stream().sorted(POLICY_ORDER).toList();
-        List<AuthenticationFactorBinding> right = second.stream().sorted(POLICY_ORDER).toList();
+    private int compareBranches(List<AuthenticationFactorBinding> left, List<AuthenticationFactorBinding> right) {
         int priority = Integer.compare(left.stream().mapToInt(AuthenticationFactorBinding::priority).max().orElse(0),
                 right.stream().mapToInt(AuthenticationFactorBinding::priority).max().orElse(0));
         if (priority != 0) {

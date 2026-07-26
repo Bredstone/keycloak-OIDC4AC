@@ -26,6 +26,7 @@ import org.keycloak.util.JsonSerialization;
 public final class AuthenticationFactorPlanStore {
 
     public static final String AUTH_SESSION_FACTOR_PLAN_NOTE = "oidc4ac.authentication-factor-plan";
+    public static final String AUTH_SESSION_FACTOR_PLAN_PROGRESS_NOTE = "oidc4ac.authentication-factor-plan-progress";
 
     private AuthenticationFactorPlanStore() {
     }
@@ -58,6 +59,54 @@ public final class AuthenticationFactorPlanStore {
             return plan;
         } catch (IOException e) {
             throw new IllegalStateException("Could not store OIDC4AC authentication factor plan", e);
+        }
+    }
+
+    public static int activeBranch(AuthenticationSessionModel authenticationSession, AuthenticationFactorPlan plan, int stepIndex) {
+        return readProgress(authenticationSession).filter(progress -> progress.factorFlowId().equals(plan.factorFlowId())
+                && progress.stepIndex() == stepIndex).map(AuthenticationFactorPlanProgress::branchIndex).orElse(0);
+    }
+
+    public static void setCurrentExecution(AuthenticationSessionModel authenticationSession, AuthenticationFactorPlan plan,
+            int stepIndex, int branchIndex, String executionId) {
+        writeProgress(authenticationSession, new AuthenticationFactorPlanProgress(plan.factorFlowId(), stepIndex, branchIndex, executionId));
+    }
+
+    public static boolean advanceBranch(AuthenticationSessionModel authenticationSession, AuthenticationFactorPlan plan, int stepIndex) {
+        int nextBranch = activeBranch(authenticationSession, plan, stepIndex) + 1;
+        if (nextBranch >= plan.steps().get(stepIndex).branches().size()) {
+            return false;
+        }
+        writeProgress(authenticationSession, new AuthenticationFactorPlanProgress(plan.factorFlowId(), stepIndex, nextBranch, null));
+        return true;
+    }
+
+    public static Optional<AuthenticationFactorPlanProgress> progress(AuthenticationSessionModel authenticationSession,
+            AuthenticationFactorPlan plan) {
+        return readProgress(authenticationSession).filter(progress -> progress.factorFlowId().equals(plan.factorFlowId()));
+    }
+
+    public static void clearProgress(AuthenticationSessionModel authenticationSession) {
+        authenticationSession.removeAuthNote(AUTH_SESSION_FACTOR_PLAN_PROGRESS_NOTE);
+    }
+
+    private static Optional<AuthenticationFactorPlanProgress> readProgress(AuthenticationSessionModel authenticationSession) {
+        String serialized = authenticationSession.getAuthNote(AUTH_SESSION_FACTOR_PLAN_PROGRESS_NOTE);
+        if (serialized == null || serialized.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(JsonSerialization.readValue(serialized, AuthenticationFactorPlanProgress.class));
+        } catch (IOException | RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    private static void writeProgress(AuthenticationSessionModel authenticationSession, AuthenticationFactorPlanProgress progress) {
+        try {
+            authenticationSession.setAuthNote(AUTH_SESSION_FACTOR_PLAN_PROGRESS_NOTE, JsonSerialization.writeValueAsString(progress));
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not store OIDC4AC authentication factor plan progress", e);
         }
     }
 }
