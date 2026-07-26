@@ -791,7 +791,7 @@ public class AuthenticationProcessor {
     }
 
     public Response handleBrowserExceptionList(AuthenticationFlowException e) {
-        java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session, authenticationSession, e);
+        java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session, authenticationSession, event, e);
         if (oidc4acResponse.isPresent()) {
             return oidc4acResponse.get();
         }
@@ -837,7 +837,7 @@ public class AuthenticationProcessor {
     public Response handleBrowserException(Exception failure) {
         if (failure instanceof AuthenticationFlowException) {
             AuthenticationFlowException e = (AuthenticationFlowException) failure;
-            java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session, authenticationSession, e);
+            java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session, authenticationSession, event, e);
             if (oidc4acResponse.isPresent()) {
                 return oidc4acResponse.get();
             }
@@ -1137,6 +1137,27 @@ public class AuthenticationProcessor {
         Response challenge = authenticationFlow.processFlow();
         if (challenge != null) return challenge;
         if (authenticationSession.getAuthenticatedUser() == null) {
+            // A planned essential OIDC4AC factor can fail before an
+            // authenticator has established a user (for example, an
+            // unsupported method). Top-level ALTERNATIVE flows may lose that
+            // failure while completing, so use a generic terminal failure in
+            // that case. The bridge confirms that an essential OIDC4AC Claim
+            // was actually requested before producing its protocol response.
+            java.util.List<AuthenticationFlowException> flowFailures = authenticationFlow.getFlowExceptions();
+            AuthenticationFlowException flowFailure = authenticationFlow.isSuccessful()
+                    // An ALTERNATIVE wrapper may also be unsuccessful while
+                    // consuming all of its child failures. Treat that empty
+                    // terminal state like a generic method failure so the
+                    // bridge can decide whether an essential OIDC4AC Claim
+                    // requires the standardized authorization response.
+                    || flowFailures == null || flowFailures.isEmpty()
+                    ? new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR)
+                    : new AuthenticationFlowException(flowFailures);
+            java.util.Optional<Response> oidc4acResponse = OIDC4ACAuthenticationFailureBridge.responseFor(session,
+                    authenticationSession, event, flowFailure);
+            if (oidc4acResponse.isPresent()) {
+                return oidc4acResponse.get();
+            }
             if (this.forwardedErrorMessageStore.getForwardedMessage() != null) {
                 LoginFormsProvider forms = session.getProvider(LoginFormsProvider.class).setAuthenticationSession(authenticationSession);
                 forms.addError(this.forwardedErrorMessageStore.getForwardedMessage());

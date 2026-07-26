@@ -24,6 +24,7 @@ import jakarta.ws.rs.core.Response;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.AuthenticationFlowException;
 import org.keycloak.common.Profile;
+import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
@@ -40,19 +41,35 @@ import org.keycloak.sessions.AuthenticationSessionModel;
  */
 public final class OIDC4ACAuthenticationFailureBridge {
 
+    private static final String UNMET_REQUIREMENT_NOTE = "oidc4ac.unmet-authentication-requirement";
+
     private OIDC4ACAuthenticationFailureBridge() {
     }
 
     public static Optional<Response> responseFor(KeycloakSession session, AuthenticationSessionModel authenticationSession,
-            AuthenticationFlowException failure) {
+            EventBuilder event, AuthenticationFlowException failure) {
         if (!isApplicable(authenticationSession, failure)) {
             return Optional.empty();
         }
         LoginProtocol protocol = session.getProvider(LoginProtocol.class, OIDCLoginProtocol.LOGIN_PROTOCOL);
         if (protocol instanceof OIDCLoginProtocol oidc) {
-            return Optional.of(oidc.sendUnmetAuthenticationRequirements(authenticationSession));
+            return Optional.of(oidc.setSession(session)
+                    .setRealm(authenticationSession.getRealm())
+                    .setUriInfo(session.getContext().getUri())
+                    .setHttpHeaders(session.getContext().getRequestHeaders())
+                    .setEventBuilder(event)
+                    .sendUnmetAuthenticationRequirements(authenticationSession));
         }
         return Optional.empty();
+    }
+
+    /**
+     * Records that planning itself established that an essential request cannot
+     * be satisfied. Alternative flow wrappers can discard their child failure
+     * list, so that request-scoped fact must survive independently.
+     */
+    public static void markUnmetAuthenticationRequirement(AuthenticationSessionModel authenticationSession) {
+        authenticationSession.setAuthNote(UNMET_REQUIREMENT_NOTE, Boolean.TRUE.toString());
     }
 
     static boolean isApplicable(AuthenticationSessionModel authenticationSession, AuthenticationFlowException failure) {
@@ -61,8 +78,10 @@ public final class OIDC4ACAuthenticationFailureBridge {
             return false;
         }
         List<AuthenticationFlowException> failures = failure.getAfeList() == null ? List.of(failure) : failure.getAfeList();
+        boolean plannerMarkedUnmetRequirement = Boolean.TRUE.toString().equals(
+                authenticationSession.getAuthNote(UNMET_REQUIREMENT_NOTE));
         if (failures.stream().anyMatch(item -> item.getError() == AuthenticationFlowError.ACCESS_DENIED)
-                || failures.stream().noneMatch(item -> isMethodRequirementFailure(item.getError()))) {
+                || !plannerMarkedUnmetRequirement && failures.stream().noneMatch(item -> isMethodRequirementFailure(item.getError()))) {
             return false;
         }
         try {
@@ -82,6 +101,11 @@ public final class OIDC4ACAuthenticationFailureBridge {
     private static boolean isMethodRequirementFailure(AuthenticationFlowError error) {
         return error == AuthenticationFlowError.CREDENTIAL_SETUP_REQUIRED
                 || error == AuthenticationFlowError.INVALID_CREDENTIALS
-                || error == AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR;
+                || error == AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR
+                // A top-level ALTERNATIVE flow can collapse an earlier
+                // unplannable factor failure to UNKNOWN_USER when no factor
+                // established a user. For an essential OIDC4AC requirement it
+                // is still the same non-enumerating terminal outcome.
+                || error == AuthenticationFlowError.UNKNOWN_USER;
     }
 }

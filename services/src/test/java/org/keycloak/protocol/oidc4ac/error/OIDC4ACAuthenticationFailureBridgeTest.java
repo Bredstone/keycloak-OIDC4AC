@@ -20,6 +20,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.lang.reflect.Proxy;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.After;
@@ -66,15 +67,55 @@ public class OIDC4ACAuthenticationFailureBridgeTest {
                 new AuthenticationFlowException(AuthenticationFlowError.CREDENTIAL_SETUP_REQUIRED)));
     }
 
+    @Test
+    public void bridgesAPlannedGenericFailureWrappedByTheBrowserFlow() {
+        AuthenticationSessionModel session = authenticationSession("""
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"}}}}
+                """);
+
+        assertTrue(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
+                new AuthenticationFlowException(java.util.List.of(
+                        new AuthenticationFlowException(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR)))));
+    }
+
+    @Test
+    public void bridgesUnknownUserWhenAnEssentialFactorPlanCouldNotEstablishAUser() {
+        AuthenticationSessionModel session = authenticationSession("""
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"}}}}
+                """);
+
+        assertTrue(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
+                new AuthenticationFlowException(AuthenticationFlowError.UNKNOWN_USER)));
+    }
+
+    @Test
+    public void bridgesPlannerMarkedRequirementWhenAnAlternativeFlowDiscardsFailures() {
+        AuthenticationSessionModel session = authenticationSession("""
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"}}}}
+                """);
+        OIDC4ACAuthenticationFailureBridge.markUnmetAuthenticationRequirement(session);
+
+        assertTrue(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
+                new AuthenticationFlowException(java.util.List.of())));
+    }
+
     private static AuthenticationSessionModel authenticationSession(String claims) {
-        Map<String, String> notes = Map.of(OIDCLoginProtocol.CLAIMS_PARAM, claims);
+        Map<String, String> clientNotes = Map.of(OIDCLoginProtocol.CLAIMS_PARAM, claims);
+        Map<String, String> authNotes = new HashMap<>();
         return (AuthenticationSessionModel) Proxy.newProxyInstance(AuthenticationSessionModel.class.getClassLoader(),
                 new Class<?>[] { AuthenticationSessionModel.class }, (proxy, method, arguments) -> {
                     if ("getProtocol".equals(method.getName())) {
                         return OIDCLoginProtocol.LOGIN_PROTOCOL;
                     }
                     if ("getClientNote".equals(method.getName())) {
-                        return notes.get(arguments[0]);
+                        return clientNotes.get(arguments[0]);
+                    }
+                    if ("getAuthNote".equals(method.getName())) {
+                        return authNotes.get(arguments[0]);
+                    }
+                    if ("setAuthNote".equals(method.getName())) {
+                        authNotes.put((String) arguments[0], (String) arguments[1]);
+                        return null;
                     }
                     if ("toString".equals(method.getName())) {
                         return "OIDC4AC test authentication session";

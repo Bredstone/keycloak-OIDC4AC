@@ -35,6 +35,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.protocol.oidc4ac.error.OIDC4ACAuthenticationFailureBridge;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorBinding;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlan;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanPlanner;
@@ -96,7 +97,16 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
             AuthenticationFactorPlanResult result = new AuthenticationFactorPlanPlanner().plan(requests,
                     factorFlow.getId(), bindings);
             if (result.essentialRequirementsUnplannable()) {
+                OIDC4ACAuthenticationFailureBridge.markUnmetAuthenticationRequirement(context.getAuthenticationSession());
                 context.failure(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR);
+                return;
+            }
+            if (result.plan().steps().isEmpty()) {
+                // A non-essential request may name only unavailable methods or
+                // constraints. It remains a best-effort preference and must
+                // not activate an empty request-scoped container that would
+                // otherwise prevent ordinary authentication from completing.
+                context.success();
                 return;
             }
             AuthenticationFactorPlanStore.storeIfAbsent(context.getAuthenticationSession(), result.plan());
