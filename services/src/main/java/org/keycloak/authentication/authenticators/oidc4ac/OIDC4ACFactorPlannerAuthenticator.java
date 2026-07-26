@@ -40,6 +40,7 @@ import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlan;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanPlanner;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanResult;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanStore;
+import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimsRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodCapability;
@@ -69,7 +70,6 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
         }
         try {
             AuthenticationFlowModel factorFlow = configuredSiblingFactorFlow(context, factorFlowAlias.orElseThrow());
-            AuthenticationFactorPlan emptyPlan = new AuthenticationFactorPlan(factorFlow.getId(), List.of());
             Optional<AuthenticationFactorPlan> existingPlan = AuthenticationFactorPlanStore.read(context.getAuthenticationSession());
             if (existingPlan.isPresent() && !factorFlow.getId().equals(existingPlan.orElseThrow().factorFlowId())) {
                 throw new IllegalArgumentException("Only one OIDC4AC factor container may be planned per authorization");
@@ -80,12 +80,18 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
             }
             if (!Profile.isFeatureEnabled(Profile.Feature.OIDC4AC)
                     || !OIDCLoginProtocol.LOGIN_PROTOCOL.equals(context.getAuthenticationSession().getProtocol())) {
-                AuthenticationFactorPlanStore.storeIfAbsent(context.getAuthenticationSession(), emptyPlan);
                 context.success();
                 return;
             }
             var requests = AmrDetailsRequestParser.parseClaimsParameter(
                     context.getAuthenticationSession().getClientNote(OIDCLoginProtocol.CLAIMS_PARAM));
+            if (!hasRequestedAmrDetails(requests)) {
+                // Do not turn the configured factor container into a no-op for
+                // an ordinary browser/account login. Without an OIDC4AC
+                // request, its normal ALTERNATIVE policy remains in charge.
+                context.success();
+                return;
+            }
             List<AuthenticationFactorBinding> bindings = bindings(context, factorFlow);
             AuthenticationFactorPlanResult result = new AuthenticationFactorPlanPlanner().plan(requests,
                     factorFlow.getId(), bindings);
@@ -101,6 +107,10 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
             // unavailable method to an RP with an essential requirement.
             context.failure(AuthenticationFlowError.GENERIC_AUTHENTICATION_ERROR);
         }
+    }
+
+    static boolean hasRequestedAmrDetails(AmrDetailsClaimsRequest requests) {
+        return !requests.isEmpty();
     }
 
     private Optional<String> configuredFactorFlowAlias(AuthenticationFlowContext context) {
