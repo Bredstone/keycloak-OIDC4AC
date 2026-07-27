@@ -27,6 +27,7 @@ public final class AuthenticationFactorPlanStore {
 
     public static final String AUTH_SESSION_FACTOR_PLAN_NOTE = "oidc4ac.authentication-factor-plan";
     public static final String AUTH_SESSION_FACTOR_PLAN_PROGRESS_NOTE = "oidc4ac.authentication-factor-plan-progress";
+    public static final String AUTH_SESSION_FACTOR_SETUP_NOTE = "oidc4ac.authentication-factor-setup";
 
     private AuthenticationFactorPlanStore() {
     }
@@ -88,6 +89,19 @@ public final class AuthenticationFactorPlanStore {
 
     public static void clearProgress(AuthenticationSessionModel authenticationSession) {
         authenticationSession.removeAuthNote(AUTH_SESSION_FACTOR_PLAN_PROGRESS_NOTE);
+    }
+
+    public static void markSetupRequired(AuthenticationSessionModel authenticationSession, String executionId) {
+        authenticationSession.setAuthNote(AUTH_SESSION_FACTOR_SETUP_NOTE, executionId);
+    }
+
+    public static Optional<String> pendingSetupExecution(AuthenticationSessionModel authenticationSession) {
+        return Optional.ofNullable(authenticationSession.getAuthNote(AUTH_SESSION_FACTOR_SETUP_NOTE))
+                .filter(value -> !value.isBlank());
+    }
+
+    public static void clearSetupRequired(AuthenticationSessionModel authenticationSession) {
+        authenticationSession.removeAuthNote(AUTH_SESSION_FACTOR_SETUP_NOTE);
     }
 
     private static Optional<AuthenticationFactorPlanProgress> readProgress(AuthenticationSessionModel authenticationSession) {

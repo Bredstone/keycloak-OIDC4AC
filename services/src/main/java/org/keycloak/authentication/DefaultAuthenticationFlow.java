@@ -491,6 +491,16 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         return Optional.empty();
     }
 
+    private boolean isPlannedFactorExecution(AuthenticationExecutionModel execution) {
+        Optional<AuthenticationFactorPlan> factorPlan = factorPlanFor(execution);
+        if (factorPlan.isEmpty()) {
+            return false;
+        }
+        return AuthenticationFactorPlanStore.progress(processor.getAuthenticationSession(), factorPlan.orElseThrow())
+                .filter(progress -> progress.executionId() != null && isDescendantOf(execution, progress.executionId()))
+                .isPresent();
+    }
+
     private boolean isDescendantOf(AuthenticationExecutionModel execution, String ancestorExecutionId) {
         AuthenticationExecutionModel current = execution;
         while (current != null) {
@@ -617,8 +627,32 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         logger.debugv("authenticator: {0}", factory.getId());
         UserModel authUser = processor.getAuthenticationSession().getAuthenticatedUser();
 
-        //If executions are alternative, get the actual execution to show based on user preference
-        List<AuthenticationSelectionOption> selectionOptions = createAuthenticationSelectionList(model);
+        // If an OIDC4AC plan selected this execution, do not let the generic
+        // "try another way" resolver replace it with a sibling alternative.
+        // The resolver intentionally exposes all alternatives in a normal
+        // browser flow, but doing that here would silently turn a requested
+        // pwd + pop plan into pwd + otp. Planned one_of alternatives are
+        // handled by the request-scoped plan and its fallback policy.
+        boolean plannedFactorExecution = isPlannedFactorExecution(model);
+        // Username Form is an identity bootstrap, not a credential choice. If
+        // no user has been resolved yet, the generic "try another way"
+        // resolver can otherwise replace it with a user-bound sibling (for
+        // example OTP) before the request-scoped planner gets a chance to
+        // select the requested factors.
+        boolean identityBootstrap = !plannedFactorExecution
+                && authUser == null
+                && "auth-username-form".equals(model.getAuthenticator());
+        // An unplanned OIDC4AC container is the ordinary-login fallback. Keep
+        // its configured first factor (pwd in the lab) instead of letting the
+        // credential-order resolver replace it with a sibling such as OTP
+        // merely because the username bootstrap has now resolved a user.
+        boolean unplannedOidc4acFactor = !plannedFactorExecution
+                && "auth-username-password-form".equals(model.getAuthenticator())
+                && isOidc4acFactorExecution(model);
+        List<AuthenticationSelectionOption> selectionOptions = plannedFactorExecution || identityBootstrap
+                || unplannedOidc4acFactor
+                ? List.of()
+                : createAuthenticationSelectionList(model);
         if (!selectionOptions.isEmpty() && calledFromFlow) {
             List<AuthenticationSelectionOption> finalSelectionOptions = selectionOptions.stream().filter(aso -> !aso.getAuthenticationExecution().isAuthenticatorFlow() && !isProcessed(aso.getAuthenticationExecution())).collect(Collectors.toList());
             if (finalSelectionOptions.isEmpty()) {
@@ -644,6 +678,10 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
                     //This means that having even though the user didn't validate the
                     logger.debugv("authenticator SETUP_REQUIRED: {0}", factory.getId());
                     setExecutionStatus(model, AuthenticationSessionModel.ExecutionStatus.SETUP_REQUIRED);
+                    if (plannedFactorExecution) {
+                        AuthenticationFactorPlanStore.markSetupRequired(
+                                processor.getAuthenticationSession(), model.getId());
+                    }
                     authenticator.setRequiredActions(processor.getSession(), processor.getRealm(), processor.getAuthenticationSession().getAuthenticatedUser());
                     return null;
                 } else {
@@ -693,6 +731,18 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
      */
     private List<AuthenticationSelectionOption> createAuthenticationSelectionList(AuthenticationExecutionModel model) {
         return AuthenticationSelectionResolver.createAuthenticationSelectionList(processor, model);
+    }
+
+    private boolean isOidc4acFactorExecution(AuthenticationExecutionModel model) {
+        AuthenticationExecutionModel current = model;
+        while (current != null && current.getParentFlow() != null) {
+            AuthenticationFlowModel parent = processor.getRealm().getAuthenticationFlowById(current.getParentFlow());
+            if (parent != null && parent.getAlias() != null && parent.getAlias().startsWith("oidc4ac:")) {
+                return true;
+            }
+            current = processor.getRealm().getAuthenticationExecutionByFlowId(current.getParentFlow());
+        }
+        return false;
     }
 
 

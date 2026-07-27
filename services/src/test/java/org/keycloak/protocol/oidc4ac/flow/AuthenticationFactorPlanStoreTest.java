@@ -62,6 +62,18 @@ public class AuthenticationFactorPlanStoreTest {
         assertFalse(AuthenticationFactorPlanStore.advanceBranch(session, plan, 0));
     }
 
+    @Test
+    public void setupRequiredExecutionIsRequestScopedAndCanBeCleared() {
+        Map<String, String> notes = new HashMap<>();
+        AuthenticationSessionModel session = session(notes);
+
+        AuthenticationFactorPlanStore.markSetupRequired(session, "otp-execution");
+        assertEquals("otp-execution", AuthenticationFactorPlanStore.pendingSetupExecution(session).orElseThrow());
+
+        AuthenticationFactorPlanStore.clearSetupRequired(session);
+        assertTrue(AuthenticationFactorPlanStore.pendingSetupExecution(session).isEmpty());
+    }
+
     private static AuthenticationFactorPlan plan(String flowId, String... executions) {
         return new AuthenticationFactorPlan(flowId, List.of(new AuthenticationFactorPlanStep(List.of(
                 new AuthenticationFactorPlanBranch(List.of(executions))))));
@@ -76,6 +88,10 @@ public class AuthenticationFactorPlanStoreTest {
                     }
                     if ("setAuthNote".equals(method.getName())) {
                         notes.put((String) arguments[0], (String) arguments[1]);
+                        return null;
+                    }
+                    if ("removeAuthNote".equals(method.getName())) {
+                        notes.remove(arguments[0]);
                         return null;
                     }
                     if ("toString".equals(method.getName())) {

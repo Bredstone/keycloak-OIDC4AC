@@ -94,6 +94,7 @@ import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.LoginProtocol.Error;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.grants.device.DeviceGrantType;
+import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanStore;
 import org.keycloak.protocol.oidc.utils.OIDCResponseMode;
 import org.keycloak.protocol.oidc.utils.OIDCResponseType;
 import org.keycloak.protocol.oidc.utils.RedirectUtils;
@@ -1235,6 +1236,11 @@ public class LoginActionsService {
             initLoginEvent(authSession);
             event.event(EventType.LOGIN);
             authSession.removeAuthNote(AuthenticationProcessor.CURRENT_AUTHENTICATION_EXECUTION);
+            // Enrollment was declined, so do not resume the request-scoped
+            // factor plan as if the credential had been provisioned. The
+            // planner will report the essential request as unmet when the
+            // authorization transaction is finalized.
+            AuthenticationFactorPlanStore.clearSetupRequired(authSession);
             AuthenticationManager.setKcActionStatus(factory.getId(), RequiredActionContext.KcActionStatus.CANCELLED, authSession);
             response = AuthenticationManager.nextActionAfterAuthentication(session, authSession, clientConnection, request, session.getContext().getUri(), event);
         } else if (context.getStatus() == RequiredActionContext.Status.SUCCESS) {

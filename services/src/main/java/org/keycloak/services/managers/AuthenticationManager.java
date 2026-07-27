@@ -90,6 +90,7 @@ import org.keycloak.models.SingleUseObjectKeyModel;
 import org.keycloak.models.UserConsentModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserSessionModel;
+import org.keycloak.models.utils.AuthenticationFlowResolver;
 import org.keycloak.models.utils.DefaultRequiredActions;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.SessionExpirationUtils;
@@ -102,6 +103,7 @@ import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
 import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
+import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanContinuation;
 import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.protocol.oidc.encode.TokenContextEncoderProvider;
 import org.keycloak.rar.AuthorizationDetails;
@@ -1044,8 +1046,40 @@ public class AuthenticationManager {
                                                   Set<String> ignoredActions) {
         Response requiredAction = actionRequired(session, authSession, request, event, ignoredActions);
         if (requiredAction != null) return requiredAction;
+        if (AuthenticationFactorPlanContinuation.isPending(authSession)) {
+            AuthenticationFactorPlanContinuation.prepareForResume(authSession.getRealm(), authSession);
+            return resumeOidc4acAuthentication(session, authSession, clientConnection, request, uriInfo, event);
+        }
         return finishedRequiredActions(session, authSession, null, clientConnection, request, uriInfo, event);
 
+    }
+
+    private static Response resumeOidc4acAuthentication(KeycloakSession session,
+            AuthenticationSessionModel authSession, ClientConnection clientConnection,
+            HttpRequest request, UriInfo uriInfo, EventBuilder event) {
+        // Required-action completion temporarily switches the action URL to
+        // /login-actions/required-action. The resumed factor challenge is a
+        // normal authentication action and must be posted to
+        // /login-actions/authenticate, otherwise Keycloak treats the OTP
+        // submission as a stale required-action request.
+        authSession.setAuthNote(AuthenticationProcessor.CURRENT_FLOW_PATH, LoginActionsService.AUTHENTICATE_PATH);
+        authSession.setAction(CommonClientSessionModel.Action.AUTHENTICATE.name());
+        AuthenticationProcessor processor = new AuthenticationProcessor()
+                .setAuthenticationSession(authSession)
+                .setFlowPath(LoginActionsService.AUTHENTICATE_PATH)
+                .setBrowserFlow(true)
+                .setFlowId(AuthenticationFlowResolver.resolveBrowserFlow(authSession).getId())
+                .setConnection(clientConnection)
+                .setEventBuilder(event)
+                .setRealm(authSession.getRealm())
+                .setSession(session)
+                .setUriInfo(uriInfo)
+                .setRequest(request);
+        try {
+            return processor.authenticate();
+        } catch (Exception failure) {
+            return processor.handleBrowserException(failure);
+        }
     }
 
 
