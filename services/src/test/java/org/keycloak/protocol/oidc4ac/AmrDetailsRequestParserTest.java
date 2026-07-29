@@ -53,12 +53,12 @@ public class AmrDetailsRequestParserTest {
                       "essential": true,
                       "one_of": [
                         {"all_of": [
-                          {"amr_identifier": {"value": "pwd"}},
-                          {"amr_identifier": {"value": "otp"}, "amr_properties": {
+                          {"amr_identifier": {"value": "pwd"}, "amr_metadata": {"time": null}},
+                          {"amr_identifier": {"value": "otp"}, "amr_metadata": {"time": null}, "amr_properties": {
                             "otp_algorithm": {"essential": true, "values": ["TOTP", "HOTP"]}
                           }}
                         ]},
-                        {"amr_identifier": {"value": "pop"}}
+                        {"amr_identifier": {"value": "pop"}, "amr_metadata": {"time": null}}
                       ]
                     }
                   },
@@ -87,8 +87,8 @@ public class AmrDetailsRequestParserTest {
     public void evaluatesOneOfWithoutBranchCommitmentAndDoesNotExcludeExtraMethods() throws Exception {
         AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
                 {"id_token":{"amr_details":{"essential":true,"one_of":[
-                  {"amr_identifier":{"value":"face"},"amr_properties":{"liveness_check":{"essential":true,"value":true}}},
-                  {"amr_identifier":{"value":"otp"}}
+                  {"amr_identifier":{"value":"face"},"amr_metadata":{"time":null},"amr_properties":{"liveness_check":{"essential":true,"value":true}}},
+                  {"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}
                 ]}}}
                 """).idToken().orElseThrow();
 
@@ -103,7 +103,7 @@ public class AmrDetailsRequestParserTest {
     @Test
     public void evaluatesLocallyEssentialPropertiesAndFreshness() throws Exception {
         AmrDetailsClaimRequest missingProperty = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null},
                 "amr_properties":{"otp_algorithm":{"essential":true,"value":"TOTP"}}}}}
                 """).idToken().orElseThrow();
         AmrDetailsClaimRequest stalePassword = AmrDetailsRequestParser.parseClaimsParameter("""
@@ -121,11 +121,25 @@ public class AmrDetailsRequestParserTest {
     }
 
     @Test
+    public void acceptsMaxAgeZeroForAnExecutionInTheCurrentSecond() throws Exception {
+        AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},
+                "amr_metadata":{"time":{"essential":true,"max_age":0}}}}}
+        """).idToken().orElseThrow();
+        AuthenticationEvent event = new AuthenticationEvent(java.util.List.of(
+                execution("pwd", NOW.plusMillis(250), Map.of(), Optional.empty())));
+
+        AmrDetailsRequirementsEvaluator evaluator = new AmrDetailsRequirementsEvaluator(
+                Clock.fixed(NOW.plusMillis(500), ZoneOffset.UTC));
+        assertTrue(evaluator.evaluate(request, Optional.of(event)).satisfies(true, true));
+    }
+
+    @Test
     public void combinesEssentialDeliveryLocationsForOneEvent() throws Exception {
         AmrDetailsClaimsRequest requests = AmrDetailsRequestParser.parseClaimsParameter("""
                 {
-                  "id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"}}},
-                  "userinfo":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"}}}
+                  "id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}}},
+                  "userinfo":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}}
                 }
                 """);
         AuthenticationEvent passwordOnly = new AuthenticationEvent(java.util.List.of(execution("pwd", NOW, Map.of(), Optional.empty())));
@@ -140,7 +154,7 @@ public class AmrDetailsRequestParserTest {
     @Test
     public void treatsNonEssentialConstraintsAsBestEffort() throws Exception {
         AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null},
                 "amr_properties":{"otp_algorithm":{"value":"TOTP"}}}}}
                 """).idToken().orElseThrow();
         AuthenticationEvent event = new AuthenticationEvent(java.util.List.of(
@@ -156,13 +170,13 @@ public class AmrDetailsRequestParserTest {
         AuthenticationEvent passwordOnly = new AuthenticationEvent(java.util.List.of(
                 execution("pwd", NOW.minusSeconds(10), Map.of(), Optional.empty())));
         AmrDetailsClaimsRequest essentialOtp = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}}}
                 """);
         AmrDetailsClaimsRequest preferredOtp = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"amr_identifier":{"value":"otp"}}}}
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}}}
                 """);
         AmrDetailsClaimsRequest satisfied = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}}}}
                 """);
 
         assertTrue(planner.shouldForceBrowserReauthentication(essentialOtp, Optional.of(passwordOnly)));

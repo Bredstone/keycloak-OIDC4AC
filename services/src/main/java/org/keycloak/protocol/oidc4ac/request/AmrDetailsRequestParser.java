@@ -142,8 +142,12 @@ public final class AmrDetailsRequestParser {
         if (!object.has("amr_identifier")) {
             throw new AmrDetailsRequestException("A method expression requires amr_identifier");
         }
+        JsonNode metadataNode = object.get("amr_metadata");
+        if (metadataNode == null || !metadataNode.isObject() || !metadataNode.has("time")) {
+            throw new AmrDetailsRequestException("A method expression requires amr_metadata.time");
+        }
         return new MethodExpression(parseIdentifierConstraint(object.get("amr_identifier")),
-                parseConstraintObject(object.get("amr_metadata"), true), parseConstraintObject(object.get("amr_properties"), false));
+                parseConstraintObject(metadataNode, true), parseConstraintObject(object.get("amr_properties"), false));
     }
 
     private static IdentifierConstraint parseIdentifierConstraint(JsonNode node) throws AmrDetailsRequestException {

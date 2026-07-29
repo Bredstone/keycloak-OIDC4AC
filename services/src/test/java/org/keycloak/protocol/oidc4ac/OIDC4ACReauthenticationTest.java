@@ -57,10 +57,10 @@ public class OIDC4ACReauthenticationTest {
         OIDCLoginProtocol protocol = new OIDCLoginProtocol(null, null, null, null, null);
 
         assertFalse(protocol.requireReauthentication(passwordSso, authenticationSession("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}}}}
                 """)));
         assertTrue(protocol.requireReauthentication(passwordSso, authenticationSession("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}}}
                 """)));
     }
 

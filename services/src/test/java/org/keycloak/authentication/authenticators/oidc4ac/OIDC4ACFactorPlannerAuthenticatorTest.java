@@ -36,7 +36,7 @@ class OIDC4ACFactorPlannerAuthenticatorTest {
     void plansOnlyWhenAmrDetailsWasRequested() throws Exception {
         assertTrue(OIDC4ACFactorPlannerAuthenticator.hasRequestedAmrDetails(
                 AmrDetailsRequestParser.parseClaimsParameter("""
-                        {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"}}}}
+                        {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}}}}
                         """)));
     }
 }

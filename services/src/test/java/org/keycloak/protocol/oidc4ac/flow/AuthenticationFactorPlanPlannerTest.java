@@ -34,10 +34,10 @@ public class AuthenticationFactorPlanPlannerTest {
     public void selectsAnArbitraryAllOfSetButUsesRealmPriorityRatherThanRequestOrder() throws Exception {
         AuthenticationFactorPlanResult result = planner.plan(request("""
                 {"id_token":{"amr_details":{"essential":true,"all_of":[
-                  {"amr_identifier":{"value":"otp"}},
-                  {"amr_identifier":{"value":"email"}},
-                  {"amr_identifier":{"value":"pwd"}},
-                  {"amr_identifier":{"value":"pop"}}
+                  {"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}},
+                  {"amr_identifier":{"value":"email"},"amr_metadata":{"time":null}},
+                  {"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}},
+                  {"amr_identifier":{"value":"pop"},"amr_metadata":{"time":null}}
                 ]}}}
                 """), "factors", List.of(
                 binding("email-flow", "email", 40),
@@ -53,13 +53,13 @@ public class AuthenticationFactorPlanPlannerTest {
     public void choosesOneOfBranchByRealmPolicyAndThenAppliesAllOf() throws Exception {
         AuthenticationFactorPlanResult result = planner.plan(request("""
                 {"id_token":{"amr_details":{"essential":true,"all_of":[
-                  {"amr_identifier":{"value":"pwd"}},
+                  {"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}},
                   {"one_of":[
                     {"all_of":[
-                      {"amr_identifier":{"value":"otp"}},
-                      {"amr_identifier":{"value":"email"}}
+                      {"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}},
+                      {"amr_identifier":{"value":"email"},"amr_metadata":{"time":null}}
                     ]},
-                    {"amr_identifier":{"value":"pop"}}
+                    {"amr_identifier":{"value":"pop"},"amr_metadata":{"time":null}}
                   ]}
                 ]}}}
                 """), "factors", List.of(
@@ -76,7 +76,7 @@ public class AuthenticationFactorPlanPlannerTest {
     @Test
     public void refusesEssentialPropertyRequirementsWithoutACapableBinding() throws Exception {
         AuthenticationFactorPlanResult result = planner.plan(request("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null},
                   "amr_properties":{"pwd_iterations":{"essential":true}}}}}
                 """), "factors", List.of(binding("pwd-flow", "pwd", 10)));
 
@@ -87,7 +87,7 @@ public class AuthenticationFactorPlanPlannerTest {
     @Test
     public void optionalUnsupportedMethodDoesNotPreventTheConfiguredContainerFromCompleting() throws Exception {
         AuthenticationFactorPlanResult result = planner.plan(request("""
-                {"userinfo":{"amr_details":{"essential":false,"amr_identifier":{"value":"email"}}}}
+                {"userinfo":{"amr_details":{"essential":false,"amr_identifier":{"value":"email"},"amr_metadata":{"time":null}}}}
                 """), "factors", List.of(binding("pwd-flow", "pwd", 10)));
 
         assertFalse(result.essentialRequirementsUnplannable());

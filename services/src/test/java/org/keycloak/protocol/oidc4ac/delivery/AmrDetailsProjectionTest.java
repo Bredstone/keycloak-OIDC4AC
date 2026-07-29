@@ -41,11 +41,11 @@ public class AmrDetailsProjectionTest {
                 Instant.parse("2026-07-25T12:00:00Z"), Map.of("issuer", text("local")),
                 Optional.of(Map.of("pwd_derivation_algorithm", text("argon2id"), "pwd_iterations", text("210000"))))));
         AmrDetailsClaimRequest idTokenRequest = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"amr_identifier":{"value":"pwd"},"amr_properties":
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null},"amr_properties":
                 {"pwd_derivation_algorithm":null}}}}
                 """).idToken().orElseThrow();
         AmrDetailsClaimRequest userInfoRequest = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"userinfo":{"amr_details":{"amr_identifier":{"value":"pwd"},"amr_metadata":{"issuer":null}}}}
+                {"userinfo":{"amr_details":{"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null,"issuer":null}}}}
                 """).userInfo().orElseThrow();
 
         Map<String, Object> idTokenDetail = AmrDetailsProjection.project(idTokenRequest, event).get(0);
@@ -68,8 +68,7 @@ public class AmrDetailsProjectionTest {
                 new AuthenticationMethodExecution("face", Instant.parse("2026-07-25T12:01:00Z"),
                         Map.of("issuer", text("remote")), Optional.of(Map.of("liveness_check", text("passed"))))));
         AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
-                {"id_token":{"amr_details":{"amr_identifier":{"value":"face"},"amr_metadata":
-                {"issuer":null},"amr_properties":{"liveness_check":null}}}}
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"face"},"amr_metadata":{"time":null,"issuer":null},"amr_properties":{"liveness_check":null}}}}
                 """).idToken().orElseThrow();
 
         List<Map<String, Object>> details = AmrDetailsProjection.project(request, event);

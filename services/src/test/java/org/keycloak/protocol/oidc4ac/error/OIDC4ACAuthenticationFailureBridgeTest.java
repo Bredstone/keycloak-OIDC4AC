@@ -48,7 +48,7 @@ public class OIDC4ACAuthenticationFailureBridgeTest {
     @Test
     public void bridgesTerminalMethodFailuresButNotEndUserRefusal() {
         AuthenticationSessionModel session = authenticationSession("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}}}
                 """);
 
         assertTrue(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
@@ -60,7 +60,7 @@ public class OIDC4ACAuthenticationFailureBridgeTest {
     @Test
     public void doesNotBridgeVoluntaryRequests() {
         AuthenticationSessionModel session = authenticationSession("""
-                {"id_token":{"amr_details":{"amr_identifier":{"value":"otp"}}}}
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"otp"},"amr_metadata":{"time":null}}}}
                 """);
 
         assertFalse(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
@@ -70,7 +70,7 @@ public class OIDC4ACAuthenticationFailureBridgeTest {
     @Test
     public void bridgesAPlannedGenericFailureWrappedByTheBrowserFlow() {
         AuthenticationSessionModel session = authenticationSession("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"},"amr_metadata":{"time":null}}}}
                 """);
 
         assertTrue(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
@@ -81,7 +81,7 @@ public class OIDC4ACAuthenticationFailureBridgeTest {
     @Test
     public void bridgesUnknownUserWhenAnEssentialFactorPlanCouldNotEstablishAUser() {
         AuthenticationSessionModel session = authenticationSession("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"},"amr_metadata":{"time":null}}}}
                 """);
 
         assertTrue(OIDC4ACAuthenticationFailureBridge.isApplicable(session,
@@ -91,7 +91,7 @@ public class OIDC4ACAuthenticationFailureBridgeTest {
     @Test
     public void bridgesPlannerMarkedRequirementWhenAnAlternativeFlowDiscardsFailures() {
         AuthenticationSessionModel session = authenticationSession("""
-                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"}}}}
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"face"},"amr_metadata":{"time":null}}}}
                 """);
         OIDC4ACAuthenticationFailureBridge.markUnmetAuthenticationRequirement(session);
 

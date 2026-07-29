@@ -129,6 +129,13 @@ public final class AmrDetailsRequirementsEvaluator {
 
     private boolean satisfiesMaxAge(Instant executionTime, long maxAge) {
         Instant now = clock.instant();
-        return !executionTime.isAfter(now) && !executionTime.plusSeconds(maxAge).isBefore(now);
+        // Authentication times are represented with RFC 3339 precision, while
+        // max_age is a whole-second freshness bound (as is OIDC auth_time).
+        // Compare epoch seconds so max_age=0 can accept an execution that
+        // completed in the current second instead of failing a few
+        // milliseconds later when the final token is assembled.
+        long executionSecond = executionTime.getEpochSecond();
+        long nowSecond = now.getEpochSecond();
+        return executionSecond <= nowSecond && executionSecond + maxAge >= nowSecond;
     }
 }
