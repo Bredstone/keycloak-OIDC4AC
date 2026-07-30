@@ -14,10 +14,10 @@ import {
 } from "@patternfly/react-core";
 import { InfoCircleIcon } from "@patternfly/react-icons";
 import { cloneDeep, sortBy } from "lodash-es";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
 import {
   ConfirmDialogModal,
@@ -50,6 +50,7 @@ import useToggle from "../utils/useToggle";
 import { AdvancedTab } from "./AdvancedTab";
 import { ClientSessions } from "./ClientSessions";
 import { ClientSettings } from "./ClientSettings";
+import { Oidc4acClientPolicy } from "./Oidc4acClientPolicy";
 import { SsfTab } from "./ssf/SsfTab";
 import { AuthorizationEvaluate } from "./authorization/AuthorizationEvaluate";
 import { AuthorizationExport } from "./authorization/AuthorizationExport";
@@ -245,6 +246,8 @@ export default function ClientDetails() {
   // one means SSF endpoints aren't available — surfacing the tab would
   // crash on the first API call (the original bug from the review).
   const isSsfFeatureEnabled = isFeatureEnabled(Feature.Ssf);
+  const isOidc4acRealmEnabled =
+    realmRepresentation.attributes?.["oidc4ac.enabled"] !== "false";
   const isSsfRealmEnabled =
     realmRepresentation.attributes?.["ssf.transmitterEnabled"] === "true";
   const showSsfTab =
@@ -259,14 +262,27 @@ export default function ClientDetails() {
     return sortBy(roles, (role) => role.name?.toUpperCase());
   };
 
-  const tab = (tab: ClientTab) =>
-    toClient({
-      realm,
-      clientId,
-      tab,
-    });
+  const tab = useCallback(
+    (tab: ClientTab) =>
+      toClient({
+        realm,
+        clientId,
+        tab,
+      }),
+    [realm, clientId],
+  );
 
   const settingsTab = useRoutableTab(tab("settings"));
+  const oidc4acTab = useRoutableTab(tab("oidc4ac"));
+  const location = useLocation();
+  useEffect(() => {
+    if (
+      !isOidc4acRealmEnabled &&
+      location.pathname === tab("oidc4ac").pathname
+    ) {
+      navigate(tab("settings"), { replace: true });
+    }
+  }, [isOidc4acRealmEnabled, location.pathname, navigate, tab]);
   const keysTab = useRoutableTab(tab("keys"));
   const credentialsTab = useRoutableTab(tab("credentials"));
   const rolesTab = useRoutableTab(tab("roles"));
@@ -494,6 +510,19 @@ export default function ClientDetails() {
                 reset={() => setupForm(client)}
               />
             </Tab>
+            {isFeatureEnabled(Feature.OIDC4AC) &&
+              isOidc4acRealmEnabled &&
+              client.protocol === "openid-connect" &&
+              !client.bearerOnly && (
+                <Tab
+                  id="oidc4ac"
+                  data-testid="clientOidc4acTab"
+                  title={<TabTitleText>{t("oidc4acPolicy")}</TabTitleText>}
+                  {...oidc4acTab}
+                >
+                  <Oidc4acClientPolicy client={client} />
+                </Tab>
+              )}
             {((!client.publicClient && !isRealmClient(client)) ||
               client.protocol === "saml") && (
               <Tab

@@ -5,6 +5,7 @@ import type { AppRouteObject } from "../../routes";
 
 export type ClientTab =
   | "settings"
+  | "oidc4ac"
   | "keys"
   | "credentials"
   | "roles"

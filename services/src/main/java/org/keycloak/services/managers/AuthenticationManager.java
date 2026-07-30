@@ -994,7 +994,9 @@ public class AuthenticationManager {
         // The user has successfully logged in and we can clear his/her previous login failure attempts.
         logSuccess(session, authSession);
 
-        if (Profile.isFeatureEnabled(Profile.Feature.OIDC4AC) && OIDCLoginProtocol.LOGIN_PROTOCOL.equals(authSession.getProtocol())) {
+        if (Profile.isFeatureEnabled(Profile.Feature.OIDC4AC)
+                && org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isEnabled(realm)
+                && OIDCLoginProtocol.LOGIN_PROTOCOL.equals(authSession.getProtocol())) {
             AuthenticationEventSnapshotStore.persist(session, authSession, userSession, clientSession,
                     authSession.getClientNote(OIDCLoginProtocol.CLAIMS_PARAM))
                     .ifPresent(grantId -> AuthenticationEventSnapshotStore.attachGrant(clientSessionCtx, grantId));

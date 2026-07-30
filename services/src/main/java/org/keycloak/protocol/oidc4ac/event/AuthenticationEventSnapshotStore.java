@@ -37,6 +37,7 @@ import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
 import org.keycloak.representations.JsonWebToken;
+import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
@@ -92,7 +93,8 @@ public final class AuthenticationEventSnapshotStore {
             String serialized = AuthenticationEventSnapshotCodec.serialize(current.get());
             userSession.setNote(USER_SESSION_SSO_EVENT_NOTE, serialized);
             event = current;
-        } else if (AuthenticatorUtil.isSSOAuthentication(authenticationSession)) {
+        } else if (AuthenticatorUtil.isSSOAuthentication(authenticationSession)
+                || AuthenticationManager.isSSOAuthentication(clientSession)) {
             event = sso(userSession);
         } else {
             event = Optional.empty();

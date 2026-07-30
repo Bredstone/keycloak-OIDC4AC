@@ -26,6 +26,7 @@ import org.keycloak.events.Details;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetails;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsContext;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsProvider;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.jboss.logging.Logger;
 
 /** Captures safe details only for a successful current-flow execution. */
@@ -37,7 +38,9 @@ public final class AuthenticationMethodDetailsRecorder {
     }
 
     public static void record(AuthenticationProcessor processor, AuthenticationProcessor.Result result) {
-        if (!Profile.isFeatureEnabled(Profile.Feature.OIDC4AC) || processor.getAuthenticationSession().getAuthenticatedUser() == null) {
+        if (!Profile.isFeatureEnabled(Profile.Feature.OIDC4AC)
+                || !OIDC4ACRealmSettings.isEnabled(processor.getRealm())
+                || processor.getAuthenticationSession().getAuthenticatedUser() == null) {
             return;
         }
 

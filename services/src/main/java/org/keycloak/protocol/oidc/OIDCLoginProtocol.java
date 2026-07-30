@@ -56,6 +56,7 @@ import org.keycloak.protocol.oidc4ac.OIDC4ACConstants;
 import org.keycloak.protocol.oidc4ac.evaluation.AmrDetailsRequirementsEvaluator;
 import org.keycloak.protocol.oidc4ac.evaluation.AuthenticationRequirementsPlanner;
 import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
 import org.keycloak.protocol.oidc.endpoints.request.RequestUriType;
@@ -359,12 +360,16 @@ public class OIDCLoginProtocol implements LoginProtocol {
 
     private boolean hasUnmetEssentialAuthenticationRequirements(AuthenticationSessionModel authSession,
             ClientSessionContext clientSessionContext) {
-        if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)) {
+        if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)
+                || !org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isEnabled(realm)) {
             return false;
         }
         try {
-            return !new AmrDetailsRequirementsEvaluator(Clock.systemUTC()).essentialRequirementsSatisfied(
-                    AmrDetailsRequestParser.parseClaimsParameter(authSession.getClientNote(OIDCLoginProtocol.CLAIMS_PARAM)),
+            var requests = AmrDetailsRequestParser.parseClaimsParameter(authSession.getClientNote(OIDCLoginProtocol.CLAIMS_PARAM));
+            if (!OIDC4ACDisclosurePolicy.forModels(realm, authSession.getClient()).essentialRequestsRepresentable(requests)) {
+                return true;
+            }
+            return !new AmrDetailsRequirementsEvaluator(Clock.systemUTC()).essentialRequirementsSatisfied(requests,
                     AuthenticationEventSnapshotStore.grant(session, clientSessionContext)
                             .map(org.keycloak.protocol.oidc4ac.event.AuthenticationEventGrantSnapshot::event));
         } catch (AmrDetailsRequestException e) {
@@ -575,7 +580,8 @@ public class OIDCLoginProtocol implements LoginProtocol {
         if (isPromptLogin(authSession) || isAuthTimeExpired(userSession, authSession) || isReAuthRequiredForKcAction(userSession, authSession)) {
             return true;
         }
-        if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)) {
+        if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)
+                || !org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isEnabled(realm)) {
             return false;
         }
         if (userSession == null) {

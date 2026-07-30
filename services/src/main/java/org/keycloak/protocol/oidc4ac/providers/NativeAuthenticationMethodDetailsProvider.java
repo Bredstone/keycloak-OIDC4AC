@@ -17,6 +17,7 @@
 package org.keycloak.protocol.oidc4ac.providers;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +41,7 @@ import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodCapability;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetails;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsContext;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsProvider;
+import org.keycloak.services.Urls;
 import org.keycloak.util.JsonSerialization;
 
 /**
@@ -56,11 +58,12 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
     @Override
     public Collection<AuthenticationMethodCapability> getCapabilities() {
         return List.of(
-                new AuthenticationMethodCapability("pwd", Set.of("pwd_derivation_algorithm", "pwd_iterations"), Map.of()),
+                new AuthenticationMethodCapability("pwd", Set.of("pwd_derivation_algorithm", "pwd_iterations",
+                        "pwd_last_updated_at"), Set.of("iss"), Map.of()),
                 new AuthenticationMethodCapability("otp", Set.of("otp_algorithm", "otp_delivery_method", "otp_format",
-                        "otp_length", "otp_time_to_live"), Map.of("otp_algorithm", Set.of("HOTP", "TOTP"),
+                        "otp_length", "otp_time_to_live"), Set.of("iss"), Map.of("otp_algorithm", Set.of("HOTP", "TOTP"),
                         "otp_delivery_method", Set.of("app"), "otp_format", Set.of("numeric"))),
-                new AuthenticationMethodCapability("pop", Set.of(), Map.of()));
+                new AuthenticationMethodCapability("pop", Set.of(), Set.of("iss"), Map.of()));
     }
 
     @Override
@@ -85,7 +88,7 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
                 && (WebAuthnCredentialModel.TYPE_TWOFACTOR.equals(context.credentialType())
                         || WebAuthnCredentialModel.TYPE_PASSWORDLESS.equals(context.credentialType()))) {
             // A verified WebAuthn assertion establishes proof of possession only.
-            return Optional.of(new AuthenticationMethodDetails("pop", context.executionTime(), Map.of(), Optional.empty()));
+            return Optional.of(new AuthenticationMethodDetails("pop", context.executionTime(), metadata(context), Optional.empty()));
         }
         return Optional.empty();
     }
@@ -101,7 +104,7 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
         if (credential == null || credential.getPasswordCredentialData() == null
                 || credential.getPasswordCredentialData().getAlgorithm() == null
                 || credential.getPasswordCredentialData().getAlgorithm().isBlank()) {
-            return new AuthenticationMethodDetails("pwd", context.executionTime(), Map.of(), Optional.empty());
+            return new AuthenticationMethodDetails("pwd", context.executionTime(), metadata(context), Optional.empty());
         }
 
         Map<String, Object> properties = new java.util.LinkedHashMap<>();
@@ -109,25 +112,28 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
         if (credential.getPasswordCredentialData().getHashIterations() > 0) {
             properties.put("pwd_iterations", credential.getPasswordCredentialData().getHashIterations());
         }
-        return new AuthenticationMethodDetails("pwd", context.executionTime(), Map.of(), Optional.of(properties));
+        if (credential.getCreatedDate() != null && credential.getCreatedDate() > 0) {
+            properties.put("pwd_last_updated_at", Instant.ofEpochMilli(credential.getCreatedDate()).toString());
+        }
+        return new AuthenticationMethodDetails("pwd", context.executionTime(), metadata(context), Optional.of(properties));
     }
 
     private AuthenticationMethodDetails otpDetails(AuthenticationMethodDetailsContext context) {
         String credentialId = context.selectedCredentialId();
         if (credentialId == null || credentialId.isBlank()) {
-            return new AuthenticationMethodDetails("otp", context.executionTime(), Map.of(), Optional.empty());
+            return new AuthenticationMethodDetails("otp", context.executionTime(), metadata(context), Optional.empty());
         }
 
         CredentialModel credential = context.user().credentialManager().getStoredCredentialById(credentialId);
         if (credential == null || !OTPCredentialModel.TYPE.equals(credential.getType())) {
-            return new AuthenticationMethodDetails("otp", context.executionTime(), Map.of(), Optional.empty());
+            return new AuthenticationMethodDetails("otp", context.executionTime(), metadata(context), Optional.empty());
         }
 
         try {
             OTPCredentialData data = JsonSerialization.readValue(credential.getCredentialData(), OTPCredentialData.class);
             String mode = otpMode(data);
             if (mode == null || data.getDigits() <= 0 || (OTPCredentialModel.TOTP.equals(data.getSubType()) && data.getPeriod() <= 0)) {
-                return new AuthenticationMethodDetails("otp", context.executionTime(), Map.of(), Optional.empty());
+                return new AuthenticationMethodDetails("otp", context.executionTime(), metadata(context), Optional.empty());
             }
 
             Map<String, Object> properties = new LinkedHashMap<>();
@@ -138,11 +144,11 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
             if (OTPCredentialModel.TOTP.equals(data.getSubType())) {
                 properties.put("otp_time_to_live", data.getPeriod());
             }
-            return new AuthenticationMethodDetails("otp", context.executionTime(), Map.of(), Optional.of(properties));
+            return new AuthenticationMethodDetails("otp", context.executionTime(), metadata(context), Optional.of(properties));
         } catch (IOException | RuntimeException e) {
             // A malformed or unavailable credential must not cause login to
             // fail or produce a guessed/incomplete properties object.
-            return new AuthenticationMethodDetails("otp", context.executionTime(), Map.of(), Optional.empty());
+            return new AuthenticationMethodDetails("otp", context.executionTime(), metadata(context), Optional.empty());
         }
     }
 
@@ -154,5 +160,26 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
             return "HOTP";
         }
         return null;
+    }
+
+    /**
+     * Returns only facts available from the current Keycloak request context.
+     * A raw network address is deliberately not emitted as protocol
+     * {@code location}: the protocol's location representation is structured
+     * and must not be inferred from a remote IP address.
+     */
+    private Map<String, Object> metadata(AuthenticationMethodDetailsContext context) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        try {
+            String issuer = Urls.realmIssuer(context.session().getContext().getUri().getBaseUri(), context.realm().getName());
+            if (issuer != null && !issuer.isBlank()) {
+                metadata.put("iss", issuer);
+            }
+        } catch (RuntimeException ignored) {
+            // A provider adapter must never make authentication fail because
+            // request context metadata is unavailable (for example in SSO or
+            // a non-HTTP execution).
+        }
+        return Map.copyOf(metadata);
     }
 }

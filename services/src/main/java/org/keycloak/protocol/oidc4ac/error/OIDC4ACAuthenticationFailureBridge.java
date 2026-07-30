@@ -32,6 +32,7 @@ import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimsRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**
@@ -74,6 +75,7 @@ public final class OIDC4ACAuthenticationFailureBridge {
 
     static boolean isApplicable(AuthenticationSessionModel authenticationSession, AuthenticationFlowException failure) {
         if (!Profile.isFeatureEnabled(Profile.Feature.OIDC4AC)
+                || !realmEnabled(authenticationSession)
                 || !OIDCLoginProtocol.LOGIN_PROTOCOL.equals(authenticationSession.getProtocol())) {
             return false;
         }
@@ -96,6 +98,17 @@ public final class OIDC4ACAuthenticationFailureBridge {
 
     private static boolean isEssential(Optional<AmrDetailsClaimRequest> request) {
         return request.map(AmrDetailsClaimRequest::essential).orElse(false);
+    }
+
+    private static boolean realmEnabled(AuthenticationSessionModel authenticationSession) {
+        try {
+            return OIDC4ACRealmSettings.isEnabled(authenticationSession.getRealm());
+        } catch (RuntimeException ignored) {
+            // Authentication-session test doubles and a few non-browser
+            // integrations may not expose a realm object. Preserve the
+            // profile-gated behavior in that case.
+            return true;
+        }
     }
 
     private static boolean isMethodRequirementFailure(AuthenticationFlowError error) {

@@ -176,7 +176,7 @@ public class OIDCWellKnownProvider implements WellKnownProvider {
         config.setClaimsSupported(DEFAULT_CLAIMS_SUPPORTED);
         config.setClaimTypesSupported(DEFAULT_CLAIM_TYPES_SUPPORTED);
         config.setClaimsParameterSupported(true);
-        OIDC4ACDiscoveryMetadata.apply(config, session);
+        OIDC4ACDiscoveryMetadata.apply(config, session, realm);
 
         // Include client scopes can be disabled in the environments with thousands of client scopes to avoid potentially expensive iteration over client scopes
         if (includeClientScopes) {

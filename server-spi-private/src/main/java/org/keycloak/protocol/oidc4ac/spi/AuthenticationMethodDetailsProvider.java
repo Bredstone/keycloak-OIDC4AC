@@ -24,7 +24,12 @@ import org.keycloak.provider.Provider;
 /**
  * Experimental contract for obtaining safe OIDC4AC details after an
  * authenticator has succeeded. Implementations must not authenticate the user
- * or expose credential secrets through this contract.
+ * or expose credential secrets through this contract. Providers may advertise
+ * optional metadata (including trust-framework or assurance values) only when
+ * they can derive it from trustworthy, event-specific evidence; the native
+ * adapter deliberately emits only issuer metadata when available. A custom
+ * provider may add a protocol-conformant structured location when it has
+ * trustworthy evidence for one.
  */
 public interface AuthenticationMethodDetailsProvider extends Provider {
 

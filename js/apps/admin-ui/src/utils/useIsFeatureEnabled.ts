@@ -22,6 +22,7 @@ export enum Feature {
   ClientAuthFederated = "CLIENT_AUTH_FEDERATED",
   Workflows = "WORKFLOWS",
   StepUpAuthenticationSaml = "STEP_UP_AUTHENTICATION_SAML",
+  OIDC4AC = "OIDC4AC",
   Ssf = "SSF",
   ScimApi = "SCIM_API",
   IdentityBrokeringAPIV1 = "IDENTITY_BROKERING_API_V1",

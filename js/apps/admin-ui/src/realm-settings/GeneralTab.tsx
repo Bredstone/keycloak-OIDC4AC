@@ -127,6 +127,7 @@ function RealmSettingsGeneralTabForm({
     Feature.StepUpAuthenticationSaml,
   );
   const isScimApiEnabled = isFeatureEnabled(Feature.ScimApi);
+  const isOidc4acEnabled = isFeatureEnabled(Feature.OIDC4AC);
 
   const isSsfEnabled = isFeatureEnabled(Feature.Ssf);
 
@@ -166,6 +167,14 @@ function RealmSettingsGeneralTabForm({
       "unmanagedAttributePolicy",
       userProfileConfig.unmanagedAttributePolicy ||
         UNMANAGED_ATTRIBUTE_POLICIES[0],
+    );
+    // OIDC4AC is enabled by default for backwards compatibility with realms
+    // created before the realm-level switch existed. Keep the value as a
+    // string because realm attributes are serialized as strings by the admin
+    // REST API and by convertFormValuesToObject.
+    setValue(
+      convertAttributeNameToForm<FormFields>("attributes.oidc4ac.enabled"),
+      (realm.attributes?.["oidc4ac.enabled"] ?? "true") as any,
     );
     if (realm.attributes?.["acr.loa.map"]) {
       const acrLoaMap = Object.entries(
@@ -333,6 +342,17 @@ function RealmSettingsGeneralTabForm({
               name="scimApiEnabled"
               label={t("scimApiEnabled")}
               labelIcon={t("scimApiEnabledHelp")}
+            />
+          )}
+          {isOidc4acEnabled && (
+            <DefaultSwitchControl
+              name={convertAttributeNameToForm<FormFields>(
+                "attributes.oidc4ac.enabled",
+              )}
+              data-testid="oidc4ac-enabled"
+              label={t("oidc4acEnabled")}
+              labelIcon={t("oidc4acEnabledHelp")}
+              stringify
             />
           )}
           {isSsfEnabled && (

@@ -26,6 +26,8 @@ import org.keycloak.common.Profile;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oidc4ac.OIDC4ACConstants;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
@@ -50,12 +52,19 @@ public final class AmrDetailsDeliveryService {
         if (!Profile.isFeatureEnabled(Profile.Feature.OIDC4AC)) {
             return;
         }
+        var clientSession = clientSessionContext.getClientSession();
+        if (clientSession == null || clientSession.getUserSession() == null
+                || !OIDC4ACRealmSettings.isEnabled(clientSession.getUserSession().getRealm())) {
+            return;
+        }
         AuthenticationEventSnapshotStore.grant(session, clientSessionContext).ifPresent(snapshot -> {
             Optional<AmrDetailsClaimRequest> request = parseRequest(snapshot.claims(), idToken);
             if (request.isEmpty()) {
                 return;
             }
-            List<java.util.Map<String, Object>> details = AmrDetailsProjection.project(request.orElseThrow(), snapshot.event());
+            OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forModels(
+                    clientSession.getUserSession().getRealm(), clientSession.getClient());
+            List<java.util.Map<String, Object>> details = AmrDetailsProjection.project(request.orElseThrow(), snapshot.event(), policy);
             token.setOtherClaims(OIDC4ACConstants.AMR_DETAILS, details);
             ensureAmrContainsDetails(token, details);
         });

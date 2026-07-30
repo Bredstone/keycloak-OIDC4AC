@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { toAuthentication } from "../../src/authentication/routes/Authentication.tsx";
+import { toRealmSettings } from "../../src/realm-settings/routes/RealmSettings.tsx";
 import { createTestBed } from "../support/testbed.ts";
 import adminClient from "../utils/AdminClient.ts";
 import { assertRequiredFieldError, clickSaveButton } from "../utils/form.ts";
@@ -41,6 +42,60 @@ import {
 } from "./flow.ts";
 
 test.describe("Authentication flows", () => {
+  test("opens the OIDC4AC realm settings", async ({ page }) => {
+    await using testBed = await createTestBed();
+
+    await login(page, {
+      to: toRealmSettings({ realm: testBed.realm, tab: "oidc4ac" }),
+    });
+
+    await expect(
+      page.getByRole("heading", {
+        name: "OIDC4AC",
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("Authentication planner status")).toBeVisible();
+    await expect(page.getByText("Realm disclosure policy")).toBeVisible();
+    await expect(page.getByText("Informational disclosure only")).toBeVisible();
+    await expect(page.locator("select")).toHaveCount(0);
+  });
+
+  test("shows the OIDC4AC switch in realm General settings", async ({
+    page,
+  }) => {
+    await using testBed = await createTestBed();
+
+    await login(page, {
+      to: toRealmSettings({ realm: testBed.realm, tab: "general" }),
+    });
+
+    await expect(page.getByTestId("oidc4ac-enabled")).toBeChecked();
+    await expect(page.getByText("Enable OIDC4AC for this realm")).toBeVisible();
+  });
+
+  test("hides OIDC4AC settings when the realm switch is disabled", async ({
+    page,
+  }) => {
+    await using testBed = await createTestBed();
+    const realm = await adminClient.getRealm(testBed.realm);
+    expect(realm).toBeDefined();
+    const realmRepresentation = realm!;
+    await adminClient.updateRealm(testBed.realm, {
+      ...realmRepresentation,
+      attributes: {
+        ...realmRepresentation.attributes,
+        "oidc4ac.enabled": "false",
+      },
+    });
+
+    await login(page, {
+      to: toRealmSettings({ realm: testBed.realm, tab: "oidc4ac" }),
+    });
+
+    await expect(page.getByTestId("oidc4ac-enabled")).not.toBeChecked();
+    await expect(page.getByTestId("rs-oidc4ac-tab")).toHaveCount(0);
+  });
+
   test("searches for an existing flow", async ({ page }) => {
     await using testBed = await createTestBed();
 

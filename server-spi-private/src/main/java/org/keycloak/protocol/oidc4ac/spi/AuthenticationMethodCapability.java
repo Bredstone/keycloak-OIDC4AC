@@ -26,14 +26,26 @@ import java.util.Set;
  * <p>Only a finite, closed string vocabulary belongs in
  * {@link #finiteStringPropertyValues()}. Open domains, numbers, timestamps,
  * booleans, objects, and identifiers are represented by the property name
- * alone and are not enumerated.</p>
+ * alone and are not enumerated. Optional metadata names are advertised
+ * separately through {@link #metadataNames()} so an Admin Console can build a
+ * policy editor for custom method providers without hard-coded field names.</p>
  */
 public record AuthenticationMethodCapability(String amrIdentifier, Set<String> propertyNames,
-        Map<String, Set<String>> finiteStringPropertyValues) {
+        Set<String> metadataNames, Map<String, Set<String>> finiteStringPropertyValues) {
+
+    /**
+     * Backwards-compatible constructor for providers that do not advertise
+     * optional metadata names yet.
+     */
+    public AuthenticationMethodCapability(String amrIdentifier, Set<String> propertyNames,
+            Map<String, Set<String>> finiteStringPropertyValues) {
+        this(amrIdentifier, propertyNames, Set.of(), finiteStringPropertyValues);
+    }
 
     public AuthenticationMethodCapability {
         amrIdentifier = Objects.requireNonNull(amrIdentifier, "amrIdentifier");
         propertyNames = Set.copyOf(propertyNames);
+        metadataNames = Set.copyOf(metadataNames);
         finiteStringPropertyValues = finiteStringPropertyValues.entrySet().stream()
                 .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Set.copyOf(entry.getValue())));
 

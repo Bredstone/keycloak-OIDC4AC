@@ -24,6 +24,8 @@ import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointChecker;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointChecker.AuthorizationCheckException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 
 /**
  * Validates the OIDC4AC subset of the claims parameter after Keycloak has
@@ -33,8 +35,17 @@ public class OIDC4ACAuthorizationCheckProvider implements AuthorizationEndpointC
 
     @Override
     public void check(AuthorizationEndpointChecker context) throws AuthorizationCheckException {
+        if (!OIDC4ACRealmSettings.isEnabled(context.getRealm())) {
+            return;
+        }
         try {
-            AmrDetailsRequestParser.parseClaimsParameter(context.getAuthorizationEndpointRequest().getClaims());
+            var requests = AmrDetailsRequestParser.parseClaimsParameter(context.getAuthorizationEndpointRequest().getClaims());
+            if (!OIDC4ACDisclosurePolicy.forModels(context.getRealm(), context.getClient())
+                    .essentialRequestsRepresentable(requests)) {
+                throw new AuthorizationCheckException(Response.Status.BAD_REQUEST,
+                        org.keycloak.protocol.oidc4ac.OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS,
+                        org.keycloak.protocol.oidc4ac.OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS_DESCRIPTION);
+            }
         } catch (AmrDetailsRequestException e) {
             throw new AuthorizationCheckException(Response.Status.BAD_REQUEST, OAuthErrorException.INVALID_REQUEST,
                     "Invalid amr_details claim request");

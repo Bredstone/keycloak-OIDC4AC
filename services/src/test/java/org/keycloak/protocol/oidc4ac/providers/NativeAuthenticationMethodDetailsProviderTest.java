@@ -104,8 +104,10 @@ public class NativeAuthenticationMethodDetailsProviderTest {
         NativeAuthenticationMethodDetailsProvider provider = new NativeAuthenticationMethodDetailsProvider();
         assertEquals(Set.of("pwd", "otp", "pop"), provider.getCapabilities().stream()
                 .map(capability -> capability.amrIdentifier()).collect(java.util.stream.Collectors.toSet()));
-        assertEquals(Set.of("pwd_derivation_algorithm", "pwd_iterations"), provider.getCapabilities().stream()
+        assertEquals(Set.of("pwd_derivation_algorithm", "pwd_iterations", "pwd_last_updated_at"), provider.getCapabilities().stream()
                 .filter(capability -> capability.amrIdentifier().equals("pwd")).findFirst().orElseThrow().propertyNames());
+        assertEquals(Set.of("iss"), provider.getCapabilities().stream()
+                .filter(capability -> capability.amrIdentifier().equals("pwd")).findFirst().orElseThrow().metadataNames());
         assertEquals(Set.of("otp_algorithm", "otp_delivery_method", "otp_format", "otp_length", "otp_time_to_live"),
                 provider.getCapabilities().stream().filter(capability -> capability.amrIdentifier().equals("otp"))
                         .findFirst().orElseThrow().propertyNames());

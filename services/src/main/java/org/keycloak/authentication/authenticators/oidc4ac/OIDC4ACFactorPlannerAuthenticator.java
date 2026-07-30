@@ -41,6 +41,7 @@ import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlan;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanPlanner;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanResult;
 import org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanStore;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimsRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
@@ -64,6 +65,10 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
+        if (!OIDC4ACRealmSettings.isEnabled(context.getRealm())) {
+            context.success();
+            return;
+        }
         Optional<String> factorFlowAlias = configuredFactorFlowAlias(context);
         if (factorFlowAlias.isEmpty()) {
             context.success();

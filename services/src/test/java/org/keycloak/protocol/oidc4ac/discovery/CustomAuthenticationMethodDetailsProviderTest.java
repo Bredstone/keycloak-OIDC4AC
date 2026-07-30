@@ -60,6 +60,7 @@ public class CustomAuthenticationMethodDetailsProviderTest {
         assertEquals(List.of("email"), configuration.getOtherClaims().get("amr_identifiers_supported"));
         assertEquals(List.of("email_verification_method"),
                 configuration.getOtherClaims().get("email_properties_supported"));
+        assertEquals(List.of("channel"), configuration.getOtherClaims().get("email_metadata_supported"));
         assertEquals(List.of("code"), configuration.getOtherClaims().get("email_verification_method_values_supported"));
     }
 
@@ -67,7 +68,7 @@ public class CustomAuthenticationMethodDetailsProviderTest {
         @Override
         public java.util.Collection<AuthenticationMethodCapability> getCapabilities() {
             return List.of(new AuthenticationMethodCapability("email", Set.of("email_verification_method"),
-                    Map.of("email_verification_method", Set.of("code"))));
+                    Set.of("channel"), Map.of("email_verification_method", Set.of("code"))));
         }
 
         @Override

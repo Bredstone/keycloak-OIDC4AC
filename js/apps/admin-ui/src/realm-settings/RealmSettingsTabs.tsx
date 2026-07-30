@@ -15,8 +15,9 @@ import {
 import { useEffect, useState } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
+import { Oidc4acRealmPolicy } from "../authentication/policies/Oidc4acRealmPolicy";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import type { RealmLoAMappingType } from "../components/realm-loa-mapping/RealmLoAMapping";
 import {
@@ -179,6 +180,8 @@ export const RealmSettingsTabs = () => {
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const { realm: realmName, realmRepresentation: realm, refresh } = useRealm();
+  const oidc4acRealmEnabled = realm.attributes?.["oidc4ac.enabled"] !== "false";
+  const location = useLocation();
   const combinedLocales = useLocale();
   const navigate = useNavigate();
   const isFeatureEnabled = useIsFeatureEnabled();
@@ -301,6 +304,18 @@ export const RealmSettingsTabs = () => {
   const clientPoliciesTab = useTab("client-policies");
   const userProfileTab = useTab("user-profile");
   const userRegistrationTab = useTab("user-registration");
+  const oidc4acTab = useTab("oidc4ac");
+  useEffect(() => {
+    if (
+      !oidc4acRealmEnabled &&
+      location.pathname ===
+        toRealmSettings({ realm: realmName, tab: "oidc4ac" }).pathname
+    ) {
+      navigate(toRealmSettings({ realm: realmName, tab: "general" }), {
+        replace: true,
+      });
+    }
+  }, [location.pathname, navigate, oidc4acRealmEnabled, realmName]);
   const { hasAccess, hasSomeAccess } = useAccess();
   const canViewOrManageEvents =
     hasAccess("view-realm") && hasSomeAccess("view-events", "manage-events");
@@ -421,6 +436,15 @@ export const RealmSettingsTabs = () => {
           >
             <RealmSettingsTokensTab save={save} realm={realm!} />
           </Tab>
+          {isFeatureEnabled(Feature.OIDC4AC) && oidc4acRealmEnabled && (
+            <Tab
+              title={<TabTitleText>{t("oidc4acPolicy")}</TabTitleText>}
+              data-testid="rs-oidc4ac-tab"
+              {...oidc4acTab}
+            >
+              <Oidc4acRealmPolicy />
+            </Tab>
+          )}
           {isFeatureEnabled(Feature.ClientPolicies) && (
             <Tab
               title={<TabTitleText>{t("clientPolicies")}</TabTitleText>}

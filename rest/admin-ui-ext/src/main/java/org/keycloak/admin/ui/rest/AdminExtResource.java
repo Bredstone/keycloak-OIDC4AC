@@ -25,6 +25,11 @@ public final class AdminExtResource {
         return new AuthenticationManagementResource(session, realm, auth);
     }
 
+    @Path("/oidc4ac")
+    public Oidc4acConfigurationResource oidc4ac() {
+        return new Oidc4acConfigurationResource(session, realm, auth);
+    }
+
     @Path("/brute-force-user")
     public BruteForceUsersResource bruteForceUsers() {
         return new BruteForceUsersResource(session, realm, auth);

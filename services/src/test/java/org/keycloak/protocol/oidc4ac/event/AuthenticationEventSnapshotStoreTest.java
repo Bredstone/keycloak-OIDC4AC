@@ -45,6 +45,7 @@ import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.services.managers.AuthenticationManager;
 
 public class AuthenticationEventSnapshotStoreTest {
 
@@ -126,6 +127,26 @@ public class AuthenticationEventSnapshotStoreTest {
         }
     }
 
+    @Test
+    public void reusesSsoEventWhenAuthenticationNoteWasClearedBeforeSnapshotPersistence() {
+        Map<String, Map<String, String>> snapshots = new HashMap<>();
+        KeycloakSession session = keycloakSession(snapshots);
+        UserSessionModel userSession = userSession("user-a");
+        AuthenticatedClientSessionModel clientSession = clientSession(userSession);
+
+        AuthenticationEventSnapshotStore.persist(session,
+                authenticationSession(event("pwd", "2026-07-25T12:00:00Z"), CLAIMS), userSession, clientSession, CLAIMS)
+                .orElseThrow();
+        clientSession.setNote(AuthenticationManager.SSO_AUTH, "true");
+
+        String grantId = AuthenticationEventSnapshotStore.persist(session,
+                emptyAuthenticationSession(CLAIMS), userSession, clientSession, CLAIMS).orElseThrow();
+        ClientSessionContext context = clientSessionContext(clientSession);
+        AuthenticationEventSnapshotStore.attachGrant(context, grantId);
+        assertEquals("pwd", AuthenticationEventSnapshotStore.grant(session, context).orElseThrow()
+                .event().executions().get(0).amrIdentifier());
+    }
+
     private static AuthenticationEvent event(String method, String time) {
         return new AuthenticationEvent(List.of(new AuthenticationMethodExecution(method, Instant.parse(time), Map.of(), Optional.empty())));
     }
@@ -134,6 +155,13 @@ public class AuthenticationEventSnapshotStoreTest {
         String serialized = AuthenticationEventSnapshotCodec.serialize(event);
         return proxy(AuthenticationSessionModel.class, (method, arguments) -> switch (method.getName()) {
             case "getAuthNote" -> AuthenticationEventSnapshotStore.AUTH_SESSION_EVENT_NOTE.equals(arguments[0]) ? serialized : null;
+            case "getClientNote" -> OIDCLoginProtocol.CLAIMS_PARAM.equals(arguments[0]) ? claims : null;
+            default -> defaultValue(method.getReturnType());
+        });
+    }
+
+    private static AuthenticationSessionModel emptyAuthenticationSession(String claims) {
+        return proxy(AuthenticationSessionModel.class, (method, arguments) -> switch (method.getName()) {
             case "getClientNote" -> OIDCLoginProtocol.CLAIMS_PARAM.equals(arguments[0]) ? claims : null;
             default -> defaultValue(method.getReturnType());
         });
@@ -181,11 +209,16 @@ public class AuthenticationEventSnapshotStoreTest {
             case "getAttribute" -> null;
             default -> defaultValue(method.getReturnType());
         });
+        Map<String, String> notes = new HashMap<>();
         return proxy(AuthenticatedClientSessionModel.class, (method, arguments) -> switch (method.getName()) {
             case "getUserSession" -> userSession;
             case "getClient" -> client;
             case "getStarted" -> (int) (System.currentTimeMillis() / 1000);
-            case "setNote" -> throw new AssertionError("grant snapshots must not be written to the shared client session");
+            case "getNote" -> notes.get(arguments[0]);
+            case "setNote" -> {
+                notes.put((String) arguments[0], (String) arguments[1]);
+                yield null;
+            }
             default -> defaultValue(method.getReturnType());
         });
     }

@@ -25,6 +25,7 @@ import java.util.Set;
 
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.request.AllOfExpression;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
 import org.keycloak.protocol.oidc4ac.request.AuthenticationMethodExpression;
@@ -47,8 +48,13 @@ public final class AmrDetailsProjection {
     }
 
     public static List<Map<String, Object>> project(AmrDetailsClaimRequest request, AuthenticationEvent event) {
+        return project(request, event, OIDC4ACDisclosurePolicy.permissive());
+    }
+
+    public static List<Map<String, Object>> project(AmrDetailsClaimRequest request, AuthenticationEvent event,
+            OIDC4ACDisclosurePolicy policy) {
         if (request.expression().isEmpty()) {
-            return event.executions().stream().map(execution -> fullDetail(execution)).toList();
+            return event.executions().stream().map(execution -> fullDetail(execution, policy)).toList();
         }
 
         Map<String, RequestedFields> requested = new LinkedHashMap<>();
@@ -60,7 +66,7 @@ public final class AmrDetailsProjection {
             // Fields for an unmentioned method are empty, so only the required
             // identifier and time are delivered for that execution.
             result.add(requestedDetail(execution,
-                    requested.getOrDefault(execution.amrIdentifier(), RequestedFields.empty())));
+                    requested.getOrDefault(execution.amrIdentifier(), RequestedFields.empty()), policy));
         }
         return List.copyOf(result);
     }
@@ -79,30 +85,43 @@ public final class AmrDetailsProjection {
                 new RequestedFields(method.metadata().keySet(), method.properties().keySet()), RequestedFields::merge));
     }
 
-    private static Map<String, Object> fullDetail(AuthenticationMethodExecution execution) {
+    private static Map<String, Object> fullDetail(AuthenticationMethodExecution execution, OIDC4ACDisclosurePolicy policy) {
         Map<String, Object> detail = baseDetail(execution);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("time", execution.executionTime().toString());
-        execution.metadata().forEach((name, value) -> metadata.put(name, jsonValue(value)));
+        execution.metadata().forEach((name, value) -> {
+            if (policy.allows("amr_metadata." + name)) {
+                metadata.put(name, jsonValue(value));
+            }
+        });
         detail.put("amr_metadata", Map.copyOf(metadata));
         execution.properties().ifPresent(properties -> {
             Map<String, Object> values = new LinkedHashMap<>();
-            properties.forEach((name, value) -> values.put(name, jsonValue(value)));
+            properties.forEach((name, value) -> {
+                if (policy.allows("amr_properties." + name)) {
+                    values.put(name, jsonValue(value));
+                }
+            });
             detail.put("amr_properties", Map.copyOf(values));
         });
         return Map.copyOf(detail);
     }
 
-    private static Map<String, Object> requestedDetail(AuthenticationMethodExecution execution, RequestedFields fields) {
+    private static Map<String, Object> requestedDetail(AuthenticationMethodExecution execution, RequestedFields fields,
+            OIDC4ACDisclosurePolicy policy) {
         Map<String, Object> detail = baseDetail(execution);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("time", execution.executionTime().toString());
-        fields.metadata().forEach(name -> execution.metadataValue(name).ifPresent(value -> metadata.put(name, jsonValue(value))));
+        fields.metadata().forEach(name -> {
+            if (policy.allows("amr_metadata." + name)) {
+                execution.metadataValue(name).ifPresent(value -> metadata.put(name, jsonValue(value)));
+            }
+        });
         detail.put("amr_metadata", Map.copyOf(metadata));
 
         Map<String, Object> properties = new LinkedHashMap<>();
         execution.properties().ifPresent(actual -> fields.properties().forEach(name -> {
-            if (actual.containsKey(name)) {
+            if (policy.allows("amr_properties." + name) && actual.containsKey(name)) {
                 properties.put(name, jsonValue(actual.get(name)));
             }
         }));

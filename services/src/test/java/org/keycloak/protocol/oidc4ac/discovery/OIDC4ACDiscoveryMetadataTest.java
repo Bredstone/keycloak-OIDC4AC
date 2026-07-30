@@ -36,14 +36,29 @@ public class OIDC4ACDiscoveryMetadataTest {
         configuration.setClaimsSupported(List.of("sub"));
 
         OIDC4ACDiscoveryMetadata.apply(configuration, List.of(
-                new AuthenticationMethodCapability("pwd", Set.of("pwd_iterations", "pwd_derivation_algorithm"), Map.of()),
+                new AuthenticationMethodCapability("pwd", Set.of("pwd_iterations", "pwd_derivation_algorithm",
+                        "pwd_last_updated_at"), Set.of("iss", "time"), Map.of()),
                 new AuthenticationMethodCapability("otp", Set.of("otp_algorithm"), Map.of("otp_algorithm", Set.of("HOTP", "TOTP")))));
 
         assertTrue(configuration.getClaimsSupported().contains("amr_details"));
         assertEquals(true, configuration.getOtherClaims().get("amr_details_request_supported"));
         assertEquals(List.of("otp", "pwd"), configuration.getOtherClaims().get("amr_identifiers_supported"));
-        assertEquals(List.of("pwd_derivation_algorithm", "pwd_iterations"), configuration.getOtherClaims().get("pwd_properties_supported"));
+        assertEquals(List.of("pwd_derivation_algorithm", "pwd_iterations", "pwd_last_updated_at"),
+                configuration.getOtherClaims().get("pwd_properties_supported"));
         assertEquals(List.of("HOTP", "TOTP"), configuration.getOtherClaims().get("otp_algorithm_values_supported"));
         assertFalse(configuration.getOtherClaims().containsKey("pwd_iterations_values_supported"));
+        assertEquals(List.of("iss"), configuration.getOtherClaims().get("pwd_metadata_supported"));
+    }
+
+    @Test
+    public void canAdvertiseInformationalDisclosureWithoutRequestDrivenPlanner() {
+        OIDCConfigurationRepresentation configuration = new OIDCConfigurationRepresentation();
+        configuration.setClaimsSupported(List.of("sub"));
+
+        OIDC4ACDiscoveryMetadata.apply(configuration,
+                List.of(new AuthenticationMethodCapability("pwd", Set.of(), Map.of())), false);
+
+        assertEquals(false, configuration.getOtherClaims().get("amr_details_request_supported"));
+        assertTrue(configuration.getClaimsSupported().contains("amr_details"));
     }
 }
