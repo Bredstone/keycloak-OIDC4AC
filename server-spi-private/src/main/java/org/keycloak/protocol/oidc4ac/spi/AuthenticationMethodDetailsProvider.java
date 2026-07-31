@@ -27,9 +27,10 @@ import org.keycloak.provider.Provider;
  * or expose credential secrets through this contract. Providers may advertise
  * optional metadata (including trust-framework or assurance values) only when
  * they can derive it from trustworthy, event-specific evidence; the native
- * adapter deliberately emits only issuer metadata when available. A custom
- * provider may add a protocol-conformant structured location when it has
- * trustworthy evidence for one.
+ * adapter emits issuer metadata and, when the request context supplies a
+ * client address, a structured {@code location} object containing
+ * {@code ip_address}. A custom provider may add further protocol-conformant
+ * location members when it has trustworthy evidence for them.
  */
 public interface AuthenticationMethodDetailsProvider extends Provider {
 

@@ -99,6 +99,22 @@ public class AmrDetailsProjectionTest {
         assertTrue(((Map<String, Object>) detail.get("amr_metadata")).containsKey("time"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void preservesLocationAsAnObjectWhenItIsRequested() throws Exception {
+        AuthenticationEvent event = new AuthenticationEvent(List.of(new AuthenticationMethodExecution("pwd",
+                Instant.parse("2026-07-25T12:00:00Z"), Map.of("location",
+                        JsonSerialization.mapper.valueToTree(Map.of("ip_address", "203.0.113.7"))), Optional.empty())));
+        AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null,"location":null}}}}
+                """).idToken().orElseThrow();
+
+        Map<String, Object> metadata = (Map<String, Object>) AmrDetailsProjection.project(request, event).get(0)
+                .get("amr_metadata");
+
+        assertEquals(Map.of("ip_address", "203.0.113.7"), metadata.get("location"));
+    }
+
     private static com.fasterxml.jackson.databind.JsonNode text(String value) {
         return JsonSerialization.mapper.valueToTree(value);
     }

@@ -17,6 +17,7 @@
 package org.keycloak.protocol.oidc4ac.providers;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -59,11 +60,11 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
     public Collection<AuthenticationMethodCapability> getCapabilities() {
         return List.of(
                 new AuthenticationMethodCapability("pwd", Set.of("pwd_derivation_algorithm", "pwd_iterations",
-                        "pwd_last_updated_at"), Set.of("iss"), Map.of()),
+                        "pwd_last_updated_at"), Set.of("iss", "location"), Map.of(), Set.of("ip_address")),
                 new AuthenticationMethodCapability("otp", Set.of("otp_algorithm", "otp_delivery_method", "otp_format",
-                        "otp_length", "otp_time_to_live"), Set.of("iss"), Map.of("otp_algorithm", Set.of("HOTP", "TOTP"),
-                        "otp_delivery_method", Set.of("app"), "otp_format", Set.of("numeric"))),
-                new AuthenticationMethodCapability("pop", Set.of(), Set.of("iss"), Map.of()));
+                        "otp_length", "otp_time_to_live"), Set.of("iss", "location"), Map.of("otp_algorithm", Set.of("HOTP", "TOTP"),
+                        "otp_delivery_method", Set.of("app"), "otp_format", Set.of("numeric")), Set.of("ip_address")),
+                new AuthenticationMethodCapability("pop", Set.of(), Set.of("iss", "location"), Map.of(), Set.of("ip_address")));
     }
 
     @Override
@@ -164,9 +165,10 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
 
     /**
      * Returns only facts available from the current Keycloak request context.
-     * A raw network address is deliberately not emitted as protocol
-     * {@code location}: the protocol's location representation is structured
-     * and must not be inferred from a remote IP address.
+     * The network origin is represented using the protocol's structured
+     * {@code amr_metadata.location} object; it is never emitted as a scalar
+     * metadata value. Geospatial and postal fields are intentionally omitted
+     * because Keycloak does not establish them during native authentication.
      */
     private Map<String, Object> metadata(AuthenticationMethodDetailsContext context) {
         Map<String, Object> metadata = new LinkedHashMap<>();
@@ -180,6 +182,48 @@ public class NativeAuthenticationMethodDetailsProvider implements Authentication
             // request context metadata is unavailable (for example in SSO or
             // a non-HTTP execution).
         }
+        try {
+            String remoteAddress = context.session().getContext().getConnection().getRemoteAddr();
+            if (isIpAddress(remoteAddress)) {
+                metadata.put("location", Map.of("ip_address", remoteAddress));
+            }
+        } catch (RuntimeException ignored) {
+            // The network origin is optional and may be unavailable in
+            // non-HTTP execution contexts.
+        }
         return Map.copyOf(metadata);
+    }
+
+    private boolean isIpAddress(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        if (value.indexOf(':') >= 0) {
+            try {
+                // A colon-bearing literal is parsed without DNS resolution;
+                // zone identifiers are excluded because the claim carries an
+                // address, not a host-interface reference.
+                return !value.contains("%") && InetAddress.getByName(value).getHostAddress() != null;
+            } catch (IOException | RuntimeException ignored) {
+                return false;
+            }
+        }
+        String[] octets = value.split("\\.", -1);
+        if (octets.length != 4) {
+            return false;
+        }
+        for (String octet : octets) {
+            if (octet.isEmpty() || octet.length() > 3 || !octet.chars().allMatch(Character::isDigit)) {
+                return false;
+            }
+            try {
+                if (Integer.parseInt(octet) > 255) {
+                    return false;
+                }
+            } catch (NumberFormatException ignored) {
+                return false;
+            }
+        }
+        return true;
     }
 }

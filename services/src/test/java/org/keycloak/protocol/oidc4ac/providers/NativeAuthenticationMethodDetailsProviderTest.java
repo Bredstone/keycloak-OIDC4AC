@@ -28,8 +28,10 @@ import java.util.Set;
 
 import org.junit.Test;
 import org.keycloak.authentication.authenticators.browser.OTPFormAuthenticatorFactory;
-import org.keycloak.credential.CredentialModel;
 import org.keycloak.authentication.authenticators.browser.WebAuthnAuthenticatorFactory;
+import org.keycloak.common.ClientConnection;
+import org.keycloak.credential.CredentialModel;
+import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.SubjectCredentialManager;
@@ -52,6 +54,27 @@ public class NativeAuthenticationMethodDetailsProviderTest {
         assertEquals("pop", details.amrIdentifier());
         assertTrue(details.metadata().isEmpty());
         assertFalse(details.properties().isPresent());
+    }
+
+    @Test
+    public void representsNetworkOriginAsStructuredLocationObject() {
+        NativeAuthenticationMethodDetailsProvider provider = new NativeAuthenticationMethodDetailsProvider();
+        AuthenticationMethodDetailsContext context = contextWithRemoteAddress(WebAuthnAuthenticatorFactory.PROVIDER_ID,
+                WebAuthnCredentialModel.TYPE_TWOFACTOR, "203.0.113.7");
+
+        Object location = provider.describeSuccessfulExecution(context).orElseThrow().metadata().get("location");
+
+        assertTrue(location instanceof Map<?, ?>);
+        assertEquals(Map.of("ip_address", "203.0.113.7"), location);
+    }
+
+    @Test
+    public void omitsAnUnavailableOrInvalidNetworkOrigin() {
+        NativeAuthenticationMethodDetailsProvider provider = new NativeAuthenticationMethodDetailsProvider();
+        AuthenticationMethodDetailsContext context = contextWithRemoteAddress(WebAuthnAuthenticatorFactory.PROVIDER_ID,
+                WebAuthnCredentialModel.TYPE_TWOFACTOR, "not-an-ip-address");
+
+        assertFalse(provider.describeSuccessfulExecution(context).orElseThrow().metadata().containsKey("location"));
     }
 
     @Test
@@ -106,8 +129,11 @@ public class NativeAuthenticationMethodDetailsProviderTest {
                 .map(capability -> capability.amrIdentifier()).collect(java.util.stream.Collectors.toSet()));
         assertEquals(Set.of("pwd_derivation_algorithm", "pwd_iterations", "pwd_last_updated_at"), provider.getCapabilities().stream()
                 .filter(capability -> capability.amrIdentifier().equals("pwd")).findFirst().orElseThrow().propertyNames());
-        assertEquals(Set.of("iss"), provider.getCapabilities().stream()
+        assertEquals(Set.of("iss", "location"), provider.getCapabilities().stream()
                 .filter(capability -> capability.amrIdentifier().equals("pwd")).findFirst().orElseThrow().metadataNames());
+        assertEquals(Set.of("ip_address"), provider.getCapabilities().stream()
+                .filter(capability -> capability.amrIdentifier().equals("pwd")).findFirst().orElseThrow()
+                .locationTypesSupported());
         assertEquals(Set.of("otp_algorithm", "otp_delivery_method", "otp_format", "otp_length", "otp_time_to_live"),
                 provider.getCapabilities().stream().filter(capability -> capability.amrIdentifier().equals("otp"))
                         .findFirst().orElseThrow().propertyNames());
@@ -124,6 +150,31 @@ public class NativeAuthenticationMethodDetailsProviderTest {
             CredentialModel credential) {
         return new AuthenticationMethodDetailsContext(proxy(KeycloakSession.class), proxy(RealmModel.class), user(credential),
                 proxy(AuthenticationSessionModel.class), null, execution, "execution", credentialType, selectedCredentialId,
+                Instant.parse("2026-07-25T12:00:00Z"));
+    }
+
+    private static AuthenticationMethodDetailsContext contextWithRemoteAddress(String execution, String credentialType,
+            String remoteAddress) {
+        ClientConnection connection = proxy(ClientConnection.class, (proxy, method, arguments) -> {
+            if ("getRemoteAddr".equals(method.getName())) {
+                return remoteAddress;
+            }
+            throw new UnsupportedOperationException(method.getName());
+        });
+        KeycloakContext keycloakContext = proxy(KeycloakContext.class, (proxy, method, arguments) -> {
+            if ("getConnection".equals(method.getName())) {
+                return connection;
+            }
+            throw new UnsupportedOperationException(method.getName());
+        });
+        KeycloakSession session = proxy(KeycloakSession.class, (proxy, method, arguments) -> {
+            if ("getContext".equals(method.getName())) {
+                return keycloakContext;
+            }
+            throw new UnsupportedOperationException(method.getName());
+        });
+        return new AuthenticationMethodDetailsContext(session, proxy(RealmModel.class), user(null),
+                proxy(AuthenticationSessionModel.class), null, execution, "execution", credentialType, null,
                 Instant.parse("2026-07-25T12:00:00Z"));
     }
 

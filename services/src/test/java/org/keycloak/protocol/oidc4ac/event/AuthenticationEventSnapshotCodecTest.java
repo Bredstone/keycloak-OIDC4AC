@@ -36,7 +36,9 @@ public class AuthenticationEventSnapshotCodecTest {
     public void roundTripsImmutableEventWithMandatoryTimeAndOptionalProperties() throws Exception {
         AuthenticationEvent original = new AuthenticationEvent(List.of(
                 new AuthenticationMethodExecution("pwd", Instant.parse("2026-07-25T12:00:00Z"),
-                        Map.of("issuer", JsonSerialization.mapper.valueToTree("local")), Optional.empty())));
+                        Map.of("issuer", JsonSerialization.mapper.valueToTree("local"),
+                                "location", JsonSerialization.mapper.valueToTree(Map.of("ip_address", "203.0.113.7"))),
+                        Optional.empty())));
 
         String encoded = AuthenticationEventSnapshotCodec.serialize(original);
         AuthenticationEvent decoded = AuthenticationEventSnapshotCodec.deserialize(encoded);
@@ -44,5 +46,7 @@ public class AuthenticationEventSnapshotCodecTest {
         assertTrue(encoded.contains("\"time\""));
         assertFalse(encoded.contains("amr_properties"));
         assertEquals(original, decoded);
+        assertEquals(JsonSerialization.mapper.valueToTree(Map.of("ip_address", "203.0.113.7")),
+                decoded.executions().get(0).metadataValue("location").orElseThrow());
     }
 }

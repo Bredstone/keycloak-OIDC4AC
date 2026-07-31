@@ -42,6 +42,7 @@ public final class OIDC4ACDiscoveryMetadata {
     private static final Logger LOG = Logger.getLogger(OIDC4ACDiscoveryMetadata.class);
     private static final String IDENTIFIERS_SUPPORTED = "amr_identifiers_supported";
     private static final String REQUEST_SUPPORTED = "amr_details_request_supported";
+    private static final String LOCATION_TYPES_SUPPORTED = "location_types_supported";
     private static final String PLANNER_PROVIDER = "oidc4ac-factor-planner";
 
     private OIDC4ACDiscoveryMetadata() {
@@ -88,6 +89,7 @@ public final class OIDC4ACDiscoveryMetadata {
         Map<String, Set<String>> propertiesByIdentifier = new LinkedHashMap<>();
         Map<String, Set<String>> metadataByIdentifier = new LinkedHashMap<>();
         Map<String, Set<String>> finiteValuesByProperty = new LinkedHashMap<>();
+        Set<String> locationTypesSupported = new LinkedHashSet<>();
         for (AuthenticationMethodCapability capability : capabilities) {
             propertiesByIdentifier.computeIfAbsent(capability.amrIdentifier(), ignored -> new LinkedHashSet<>())
                     .addAll(capability.propertyNames());
@@ -95,6 +97,7 @@ public final class OIDC4ACDiscoveryMetadata {
                     .addAll(capability.metadataNames().stream().filter(name -> !"time".equals(name)).toList());
             capability.finiteStringPropertyValues().forEach((property, values) -> finiteValuesByProperty
                     .computeIfAbsent(property, ignored -> new LinkedHashSet<>()).addAll(values));
+            locationTypesSupported.addAll(capability.locationTypesSupported());
         }
 
         configuration.setOtherClaims(IDENTIFIERS_SUPPORTED, sorted(propertiesByIdentifier.keySet()));
@@ -105,6 +108,9 @@ public final class OIDC4ACDiscoveryMetadata {
         // PCR-010: advertise values only for finite, closed string vocabularies.
         finiteValuesByProperty.forEach((property, values) -> configuration.setOtherClaims(
                 property + "_values_supported", sorted(values)));
+        if (!locationTypesSupported.isEmpty()) {
+            configuration.setOtherClaims(LOCATION_TYPES_SUPPORTED, sorted(locationTypesSupported));
+        }
     }
 
     static boolean hasEnabledPlanner(RealmModel realm) {

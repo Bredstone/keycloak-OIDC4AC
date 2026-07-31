@@ -28,10 +28,14 @@ import java.util.Set;
  * booleans, objects, and identifiers are represented by the property name
  * alone and are not enumerated. Optional metadata names are advertised
  * separately through {@link #metadataNames()} so an Admin Console can build a
- * policy editor for custom method providers without hard-coded field names.</p>
+ * policy editor for custom method providers without hard-coded field names.
+ * Location object members are advertised separately through
+ * {@link #locationTypesSupported()} and are emitted as the standard
+ * {@code location_types_supported} discovery value.</p>
  */
 public record AuthenticationMethodCapability(String amrIdentifier, Set<String> propertyNames,
-        Set<String> metadataNames, Map<String, Set<String>> finiteStringPropertyValues) {
+        Set<String> metadataNames, Map<String, Set<String>> finiteStringPropertyValues,
+        Set<String> locationTypesSupported) {
 
     /**
      * Backwards-compatible constructor for providers that do not advertise
@@ -39,7 +43,16 @@ public record AuthenticationMethodCapability(String amrIdentifier, Set<String> p
      */
     public AuthenticationMethodCapability(String amrIdentifier, Set<String> propertyNames,
             Map<String, Set<String>> finiteStringPropertyValues) {
-        this(amrIdentifier, propertyNames, Set.of(), finiteStringPropertyValues);
+        this(amrIdentifier, propertyNames, Set.of(), finiteStringPropertyValues, Set.of());
+    }
+
+    /**
+     * Constructor for providers that advertise optional metadata but no
+     * location object fields.
+     */
+    public AuthenticationMethodCapability(String amrIdentifier, Set<String> propertyNames,
+            Set<String> metadataNames, Map<String, Set<String>> finiteStringPropertyValues) {
+        this(amrIdentifier, propertyNames, metadataNames, finiteStringPropertyValues, Set.of());
     }
 
     public AuthenticationMethodCapability {
@@ -48,6 +61,7 @@ public record AuthenticationMethodCapability(String amrIdentifier, Set<String> p
         metadataNames = Set.copyOf(metadataNames);
         finiteStringPropertyValues = finiteStringPropertyValues.entrySet().stream()
                 .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Set.copyOf(entry.getValue())));
+        locationTypesSupported = Set.copyOf(locationTypesSupported);
 
         if (amrIdentifier.isBlank()) {
             throw new IllegalArgumentException("amrIdentifier must not be blank");

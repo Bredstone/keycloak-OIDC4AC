@@ -37,7 +37,7 @@ public class OIDC4ACDiscoveryMetadataTest {
 
         OIDC4ACDiscoveryMetadata.apply(configuration, List.of(
                 new AuthenticationMethodCapability("pwd", Set.of("pwd_iterations", "pwd_derivation_algorithm",
-                        "pwd_last_updated_at"), Set.of("iss", "time"), Map.of()),
+                        "pwd_last_updated_at"), Set.of("iss", "time", "location"), Map.of(), Set.of("ip_address")),
                 new AuthenticationMethodCapability("otp", Set.of("otp_algorithm"), Map.of("otp_algorithm", Set.of("HOTP", "TOTP")))));
 
         assertTrue(configuration.getClaimsSupported().contains("amr_details"));
@@ -47,7 +47,8 @@ public class OIDC4ACDiscoveryMetadataTest {
                 configuration.getOtherClaims().get("pwd_properties_supported"));
         assertEquals(List.of("HOTP", "TOTP"), configuration.getOtherClaims().get("otp_algorithm_values_supported"));
         assertFalse(configuration.getOtherClaims().containsKey("pwd_iterations_values_supported"));
-        assertEquals(List.of("iss"), configuration.getOtherClaims().get("pwd_metadata_supported"));
+        assertEquals(List.of("iss", "location"), configuration.getOtherClaims().get("pwd_metadata_supported"));
+        assertEquals(List.of("ip_address"), configuration.getOtherClaims().get("location_types_supported"));
     }
 
     @Test
