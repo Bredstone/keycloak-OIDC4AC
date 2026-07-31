@@ -21,6 +21,11 @@ export default tseslint.config(
       "**/dist/",
       "**/lib/",
       "**/target/",
+      // Generated SDK/doc-example sources are produced by Wireit/Kiota and
+      // are validated by their own generation/type-check steps. They are not
+      // authored application sources and may live outside the root tsconfig.
+      "**/src/generated/",
+      "**/.wireit/",
       "./apps/keycloak-server/server/",
     ],
   },
