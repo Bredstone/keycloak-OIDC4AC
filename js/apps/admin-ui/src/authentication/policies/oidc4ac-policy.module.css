@@ -1,0 +1,16 @@
+.page {
+  /*
+   * FixedButtonsGroup is intentionally taken out of document flow. Reserve
+   * enough space for it so the last property row can be scrolled above the
+   * action bar instead of being covered by it.
+   */
+  padding-bottom: calc(
+    var(--pf-v5-global--spacer--4xl) + var(--pf-v5-global--spacer--xl)
+  );
+}
+
+/* FormAccess applies the shared 1024px form limit by default. */
+form.fullWidthForm {
+  width: 100%;
+  max-width: none;
+}

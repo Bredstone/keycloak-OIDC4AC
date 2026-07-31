@@ -27,6 +27,7 @@ import {
   DisclosureFields,
   type Capability,
 } from "./Oidc4acDisclosureFields";
+import style from "./oidc4ac-policy.module.css";
 
 type DisclosureMode = "all" | "selected" | "none";
 
@@ -158,7 +159,7 @@ export function Oidc4acRealmPolicy() {
   };
 
   return (
-    <PageSection>
+    <PageSection className={style.page}>
       <Title headingLevel="h2" size="xl" className="pf-v5-u-mb-lg">
         {t("oidc4acPolicy")}
       </Title>
@@ -215,6 +216,7 @@ export function Oidc4acRealmPolicy() {
       </Card>
 
       <Form
+        className={style.fullWidthForm}
         onSubmit={(event) => {
           event.preventDefault();
           void save();

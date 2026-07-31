@@ -1,6 +1,4 @@
 import {
-  Card,
-  CardBody,
   Checkbox,
   Divider,
   EmptyState,
@@ -13,6 +11,7 @@ import {
   Tab,
   Tabs,
   TabTitleText,
+  Title,
 } from "@patternfly/react-core";
 import { useEffect, useState } from "react";
 
@@ -50,14 +49,18 @@ export const capabilitiesFromDiscovery = (discovery: Discovery): Capability[] =>
     return { identifier, properties, metadata, values };
   });
 
-const metadataFieldsFor = (capability: Capability): DisclosureField[] =>
-  capability.metadata
+const metadataFieldsFor = (capabilities: Capability[]): DisclosureField[] => {
+  const names = new Set(
+    capabilities.flatMap((capability) => capability.metadata),
+  );
+  return [...names]
     .filter((name) => name !== "time")
     .map((name) => ({
       path: `amr_metadata.${name}`,
       name,
       values: [],
     }));
+};
 
 const propertyFieldsFor = (capability: Capability): DisclosureField[] =>
   capability.properties.map((name) => ({
@@ -146,58 +149,64 @@ export function DisclosureFields({
     );
   }
 
+  const metadataFields = metadataFieldsFor(capabilities);
+
   return (
-    <Tabs
-      activeKey={active}
-      onSelect={(_, key) => setActive(key as string)}
-      mountOnEnter
-      unmountOnExit
-    >
-      {capabilities.map((capability) => {
-        const metadataFields = metadataFieldsFor(capability);
-        const propertyFields = propertyFieldsFor(capability);
-        return (
-          <Tab
-            key={capability.identifier}
-            eventKey={capability.identifier}
-            id={`${idPrefix}-${capability.identifier}`}
-            title={<TabTitleText>{capability.identifier}</TabTitleText>}
-          >
-            <Card isPlain>
-              <CardBody>
+    <>
+      <Title headingLevel="h3" size="lg" className="pf-v5-u-mb-sm">
+        Optional metadata
+      </Title>
+      <p className="pf-v5-u-mb-md">
+        Metadata describes the authentication event and applies to every
+        authentication method. The mandatory <code>amr_metadata.time</code>{" "}
+        value is always retained.
+      </p>
+      <HelperText>
+        <HelperTextItem>
+          <strong>amr_identifier</strong> and <strong>amr_metadata.time</strong>{" "}
+          are always preserved and are not configurable here.
+        </HelperTextItem>
+      </HelperText>
+      {metadataFields.length > 0 ? (
+        <FieldGrid
+          fields={metadataFields}
+          selected={selected}
+          onToggle={onToggle}
+          disabled={disabled}
+          idPrefix={idPrefix}
+          capability="metadata"
+        />
+      ) : (
+        <p className="pf-v5-u-mt-md">No optional metadata was advertised.</p>
+      )}
+      <Divider className="pf-v5-u-my-lg" />
+      <Title headingLevel="h3" size="lg" className="pf-v5-u-mb-sm">
+        Authentication method properties
+      </Title>
+      <p className="pf-v5-u-mb-md">
+        Properties describe the method or credential used for each execution.
+        Select a method to configure its optional properties.
+      </p>
+      <Tabs
+        activeKey={active}
+        onSelect={(_, key) => setActive(key as string)}
+        mountOnEnter
+        unmountOnExit
+      >
+        {capabilities.map((capability) => {
+          const propertyFields = propertyFieldsFor(capability);
+          return (
+            <Tab
+              key={capability.identifier}
+              eventKey={capability.identifier}
+              id={`${idPrefix}-${capability.identifier}`}
+              title={<TabTitleText>{capability.identifier}</TabTitleText>}
+            >
+              <div className="pf-v5-u-pt-md">
                 <p className="pf-v5-u-mb-md">
-                  Select optional fields that may be disclosed for{" "}
-                  <strong>{capability.identifier}</strong>.
-                </p>
-                <HelperText>
-                  <HelperTextItem>
-                    <strong>amr_identifier</strong> and{" "}
-                    <strong>amr_metadata.time</strong> are always preserved and
-                    are not configurable here.
-                  </HelperTextItem>
-                </HelperText>
-                <h4 className="pf-v5-u-mt-lg">Optional metadata</h4>
-                <p className="pf-v5-u-mb-md">
-                  Metadata describes the authentication event. The mandatory
-                  <code>amr_metadata.time</code> value is always retained.
-                </p>
-                {metadataFields.length > 0 ? (
-                  <FieldGrid
-                    fields={metadataFields}
-                    selected={selected}
-                    onToggle={onToggle}
-                    disabled={disabled}
-                    idPrefix={idPrefix}
-                    capability={capability.identifier}
-                  />
-                ) : (
-                  <p>No optional metadata was advertised.</p>
-                )}
-                <Divider className="pf-v5-u-my-lg" />
-                <h4>Optional properties</h4>
-                <p className="pf-v5-u-mb-md">
-                  Properties describe the method or credential used for this
-                  execution. Enumerated values are shown beside each property.
+                  Select optional properties that may be disclosed for{" "}
+                  <strong>{capability.identifier}</strong>. Enumerated values
+                  are shown beside each property.
                 </p>
                 {propertyFields.length > 0 ? (
                   <FieldGrid
@@ -211,11 +220,11 @@ export function DisclosureFields({
                 ) : (
                   <p>This method has no optional properties advertised.</p>
                 )}
-              </CardBody>
-            </Card>
-          </Tab>
-        );
-      })}
-    </Tabs>
+              </div>
+            </Tab>
+          );
+        })}
+      </Tabs>
+    </>
   );
 }

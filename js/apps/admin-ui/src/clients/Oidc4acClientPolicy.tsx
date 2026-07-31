@@ -27,6 +27,7 @@ import {
   DisclosureFields,
   type Capability,
 } from "../authentication/policies/Oidc4acDisclosureFields";
+import style from "../authentication/policies/oidc4ac-policy.module.css";
 
 type ClientDisclosureMode = "inherit" | "selected" | "none";
 
@@ -171,6 +172,7 @@ export function Oidc4acClientPolicy({
       )}
       <FormAccess
         isHorizontal
+        className={style.fullWidthForm}
         fineGrainedAccess={client.access?.configure}
         role="manage-clients"
       >
