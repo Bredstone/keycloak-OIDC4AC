@@ -28,11 +28,11 @@ import org.keycloak.events.EventBuilder;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimsRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
-import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.keycloak.sessions.AuthenticationSessionModel;
 
 /**

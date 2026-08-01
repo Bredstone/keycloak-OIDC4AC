@@ -16,9 +16,6 @@
  */
 package org.keycloak.protocol.oidc4ac.discovery;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.List;
@@ -26,7 +23,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.junit.Test;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
@@ -36,6 +32,11 @@ import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetails;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsContext;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsProvider;
 import org.keycloak.sessions.AuthenticationSessionModel;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /** Verifies the extension contract with an external-style email adapter. */
 public class CustomAuthenticationMethodDetailsProviderTest {

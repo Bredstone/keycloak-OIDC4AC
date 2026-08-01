@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
-import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.request.AllOfExpression;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
 import org.keycloak.protocol.oidc4ac.request.AuthenticationMethodExpression;

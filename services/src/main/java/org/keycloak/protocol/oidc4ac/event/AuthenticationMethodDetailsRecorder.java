@@ -23,10 +23,11 @@ import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.Profile;
 import org.keycloak.common.util.Time;
 import org.keycloak.events.Details;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetails;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsContext;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsProvider;
-import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
+
 import org.jboss.logging.Logger;
 
 /** Captures safe details only for a successful current-flow execution. */

@@ -16,11 +16,12 @@
  */
 package org.keycloak.authentication.authenticators.oidc4ac;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
 
 import org.junit.jupiter.api.Test;
-import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OIDC4ACFactorPlannerAuthenticatorTest {
 

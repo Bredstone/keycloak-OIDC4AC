@@ -10,13 +10,14 @@
  */
 package org.keycloak.protocol.oidc4ac;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.lang.reflect.Proxy;
 
-import org.junit.Test;
 import org.keycloak.models.RealmModel;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class OIDC4ACRealmSettingsTest {
 

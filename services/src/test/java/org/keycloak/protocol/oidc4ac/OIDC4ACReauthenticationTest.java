@@ -16,18 +16,12 @@
  */
 package org.keycloak.protocol.oidc4ac;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 import org.keycloak.common.Profile;
 import org.keycloak.common.profile.CommaSeparatedListProfileConfigResolver;
 import org.keycloak.models.UserSessionModel;
@@ -37,6 +31,13 @@ import org.keycloak.protocol.oidc4ac.event.AuthenticationEventSnapshotStore;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
 import org.keycloak.sessions.AuthenticationSessionModel;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class OIDC4ACReauthenticationTest {
 

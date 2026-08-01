@@ -22,10 +22,10 @@ import org.keycloak.OAuthErrorException;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointCheckProvider;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointChecker;
 import org.keycloak.protocol.oidc.endpoints.AuthorizationEndpointChecker.AuthorizationCheckException;
+import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
-import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
-import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 
 /**
  * Validates the OIDC4AC subset of the claims parameter after Keycloak has

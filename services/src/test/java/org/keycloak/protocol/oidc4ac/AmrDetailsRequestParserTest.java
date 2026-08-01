@@ -16,22 +16,16 @@
  */
 package org.keycloak.protocol.oidc4ac;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.Test;
 import org.keycloak.protocol.oidc4ac.evaluation.AmrDetailsRequirementsEvaluator;
 import org.keycloak.protocol.oidc4ac.evaluation.AuthenticationRequirementsPlanner;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
-import org.keycloak.protocol.oidc4ac.request.AllOfExpression;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimsRequest;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestException;
@@ -39,6 +33,11 @@ import org.keycloak.protocol.oidc4ac.request.AmrDetailsRequestParser;
 import org.keycloak.protocol.oidc4ac.request.OneOfExpression;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class AmrDetailsRequestParserTest {
 

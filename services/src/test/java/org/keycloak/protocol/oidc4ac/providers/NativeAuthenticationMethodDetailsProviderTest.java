@@ -16,17 +16,12 @@
  */
 package org.keycloak.protocol.oidc4ac.providers;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
-import org.junit.Test;
 import org.keycloak.authentication.authenticators.browser.OTPFormAuthenticatorFactory;
 import org.keycloak.authentication.authenticators.browser.WebAuthnAuthenticatorFactory;
 import org.keycloak.common.ClientConnection;
@@ -40,6 +35,12 @@ import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.models.credential.WebAuthnCredentialModel;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsContext;
 import org.keycloak.sessions.AuthenticationSessionModel;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class NativeAuthenticationMethodDetailsProviderTest {
 

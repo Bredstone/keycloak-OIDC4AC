@@ -24,9 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.logging.Logger;
 import org.keycloak.common.Profile;
-import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -35,6 +33,8 @@ import org.keycloak.protocol.oidc4ac.OIDC4ACConstants;
 import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodCapability;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodDetailsProvider;
+
+import org.jboss.logging.Logger;
 
 /** Adds capability-derived OIDC4AC metadata only while the experimental feature is enabled. */
 public final class OIDC4ACDiscoveryMetadata {

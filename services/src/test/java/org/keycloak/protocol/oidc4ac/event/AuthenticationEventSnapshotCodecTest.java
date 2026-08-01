@@ -16,19 +16,20 @@
  */
 package org.keycloak.protocol.oidc4ac.event;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.Test;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
 import org.keycloak.util.JsonSerialization;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class AuthenticationEventSnapshotCodecTest {
 

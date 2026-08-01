@@ -30,12 +30,12 @@ import org.keycloak.authentication.authenticators.browser.OTPFormAuthenticatorFa
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordFormFactory;
 import org.keycloak.authentication.authenticators.browser.WebAuthnAuthenticatorFactory;
 import org.keycloak.authentication.authenticators.browser.WebAuthnPasswordlessAuthenticatorFactory;
-import org.keycloak.credential.CredentialProvider;
 import org.keycloak.credential.CredentialModel;
+import org.keycloak.credential.CredentialProvider;
 import org.keycloak.credential.PasswordCredentialProvider;
 import org.keycloak.credential.PasswordCredentialProviderFactory;
-import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.credential.OTPCredentialModel;
+import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.credential.WebAuthnCredentialModel;
 import org.keycloak.models.credential.dto.OTPCredentialData;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodCapability;

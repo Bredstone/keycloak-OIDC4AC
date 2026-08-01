@@ -18,7 +18,6 @@ import java.util.Optional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PUT;
-import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
@@ -28,8 +27,8 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.services.resources.admin.fgap.AdminPermissionEvaluator;
 
 /**

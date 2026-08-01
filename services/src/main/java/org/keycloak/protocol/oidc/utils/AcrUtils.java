@@ -37,8 +37,8 @@ import org.keycloak.representations.ClaimsRepresentation;
 import org.keycloak.representations.IDToken;
 import org.keycloak.util.JsonSerialization;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.jboss.logging.Logger;
 
 public class AcrUtils {

@@ -16,17 +16,18 @@
  */
 package org.keycloak.protocol.oidc4ac.discovery;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.junit.Test;
 import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
 import org.keycloak.protocol.oidc4ac.spi.AuthenticationMethodCapability;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class OIDC4ACDiscoveryMetadataTest {
 

@@ -16,11 +16,6 @@
  */
 package org.keycloak.protocol.oidc4ac.event;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.lang.reflect.Proxy;
 import java.time.Instant;
 import java.util.HashMap;
@@ -28,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.junit.Test;
 import org.keycloak.common.Profile;
 import org.keycloak.common.profile.CommaSeparatedListProfileConfigResolver;
 import org.keycloak.models.AuthenticatedClientSessionModel;
@@ -44,8 +38,15 @@ import org.keycloak.protocol.oidc4ac.delivery.AmrDetailsDeliveryService;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
 import org.keycloak.representations.AccessToken;
-import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.services.managers.AuthenticationManager;
+import org.keycloak.sessions.AuthenticationSessionModel;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 public class AuthenticationEventSnapshotStoreTest {
 
