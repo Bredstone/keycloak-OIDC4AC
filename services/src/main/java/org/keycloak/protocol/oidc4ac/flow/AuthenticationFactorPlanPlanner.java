@@ -101,6 +101,13 @@ public final class AuthenticationFactorPlanPlanner {
         List<List<AuthenticationFactorBinding>> result = new java.util.ArrayList<>();
         for (List<AuthenticationFactorBinding> leftBranch : left) {
             for (List<AuthenticationFactorBinding> rightBranch : right) {
+                // Each method leaf represents one execution.  Do not collapse
+                // two occurrences of the same leaf onto one configured
+                // binding: a repeated request needs two distinct executions
+                // (and therefore two independent authentication events).
+                if (rightBranch.stream().anyMatch(leftBranch::contains)) {
+                    continue;
+                }
                 LinkedHashSet<AuthenticationFactorBinding> merged = new LinkedHashSet<>(leftBranch);
                 merged.addAll(rightBranch);
                 result.add(merged.stream().sorted(POLICY_ORDER).toList());

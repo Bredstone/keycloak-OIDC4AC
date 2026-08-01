@@ -128,6 +128,11 @@ public final class OIDC4ACDisclosurePolicy {
         MethodExpression method = (MethodExpression) expression;
         return method.metadata().entrySet().stream()
                 .filter(entry -> entry.getValue().essential())
+                // amr_metadata.time is mandatory for every preserved
+                // execution and is therefore never subject to disclosure
+                // policy, even when a stored policy lists only optional
+                // fields.
+                .filter(entry -> !"time".equals(entry.getKey()))
                 .allMatch(entry -> allows("amr_metadata." + entry.getKey()))
                 && method.properties().entrySet().stream()
                 .filter(entry -> entry.getValue().essential())

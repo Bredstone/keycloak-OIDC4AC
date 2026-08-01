@@ -57,6 +57,18 @@ public class OIDC4ACDisclosurePolicyTest {
     }
 
     @Test
+    public void configuredOptionalFieldsDoNotBlockMandatoryTime() throws Exception {
+        OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forAttributeValues(
+                "never:amr_properties.pwd_derivation_algorithm", null);
+        AmrDetailsClaimsRequest requests = AmrDetailsRequestParser.parseClaimsParameter("""
+                {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},
+                "amr_metadata":{"time":null}}}}
+                """);
+
+        assertTrue(policy.essentialRequestsRepresentable(requests));
+    }
+
+    @Test
     public void oneOfRemainsRepresentableWhenOneBranchIsAllowed() throws Exception {
         OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forAttributeValues("*", "amr_properties.otp_algorithm");
         AmrDetailsClaimsRequest requests = AmrDetailsRequestParser.parseClaimsParameter("""

@@ -241,7 +241,16 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
      */
     private String checkAndValidateParentFlow(AuthenticationExecutionModel model) {
         while (true) {
-            AuthenticationExecutionModel parentFlowExecutionModel = processor.getRealm().getAuthenticationExecutionByFlowId(model.getParentFlow());
+            // A factor container may intentionally contain two sibling
+            // executions which reference the same child flow (for example,
+            // pwd followed by pwd).  The realm lookup by flow id is
+            // inherently ambiguous in that case.  While an OIDC4AC factor
+            // is active, the request-scoped plan tells us which sibling is
+            // being resumed after the child authenticator action.
+            AuthenticationExecutionModel parentFlowExecutionModel = plannedParentExecution(model).orElse(null);
+            if (parentFlowExecutionModel == null) {
+                parentFlowExecutionModel = processor.getRealm().getAuthenticationExecutionByFlowId(model.getParentFlow());
+            }
 
             if (parentFlowExecutionModel != null) {
                 Optional<AuthenticationFactorPlan> factorPlan = AuthenticationFactorPlanStore
@@ -275,6 +284,20 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
                 return model.getParentFlow();
             }
         }
+    }
+
+    private Optional<AuthenticationExecutionModel> plannedParentExecution(AuthenticationExecutionModel model) {
+        if (model.getParentFlow() == null) {
+            return Optional.empty();
+        }
+        Optional<AuthenticationFactorPlan> plan = AuthenticationFactorPlanStore.read(processor.getAuthenticationSession());
+        if (plan.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<String> executionId = AuthenticationFactorPlanStore.progress(processor.getAuthenticationSession(), plan.orElseThrow())
+                .map(org.keycloak.protocol.oidc4ac.flow.AuthenticationFactorPlanProgress::executionId);
+        return executionId.flatMap(id -> Optional.ofNullable(processor.getRealm().getAuthenticationExecutionById(id)))
+                .filter(execution -> model.getParentFlow().equals(execution.getFlowId()));
     }
 
     /**
@@ -393,6 +416,9 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
                     AuthenticationFactorPlanStore.setCurrentExecution(processor.getAuthenticationSession(), factorPlan,
                             stepIndex, branchIndex, executionId);
                     try {
+                        if (isRepeatedOidc4acFactor(factorPlan, stepIndex, branchIndex, executionId, factor)) {
+                            resetRepeatedOidc4acFactorState(factor);
+                        }
                         Response response = processSingleFlowExecutionModel(factor, true);
                         if (response != null) {
                             return response;
@@ -420,6 +446,59 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         }
         AuthenticationFactorPlanStore.clearProgress(processor.getAuthenticationSession());
         return onFlowExecutionsSuccessful();
+    }
+
+    /**
+     * Two planned bindings may intentionally point at distinct executions of
+     * the same factor flow (for example, {@code pwd} followed by {@code pwd}).
+     * Keycloak normally stores the child execution status by flow execution ID,
+     * so a second instance would otherwise see the first instance's successful
+     * child and silently skip its challenge. Mark only already-processed
+     * descendants as failed before entering the new sibling; this keeps the
+     * parent execution statuses and the immutable event recorder intact while
+     * allowing the factor flow to run again.
+     */
+    private void resetRepeatedOidc4acFactorState(AuthenticationExecutionModel factor) {
+        if (!factor.isAuthenticatorFlow()) {
+            return;
+        }
+        // A challenged factor is being resumed after the user submitted its
+        // form. Resetting its descendants here would discard that action and
+        // render the same form indefinitely.
+        if (processor.getAuthenticationSession().getExecutionStatus().get(factor.getId())
+                == AuthenticationSessionModel.ExecutionStatus.CHALLENGED) {
+            return;
+        }
+        List<AuthenticationExecutionModel> descendants = processor.getRealm()
+                .getAuthenticationExecutionsStream(factor.getFlowId()).toList();
+        if (descendants.stream().noneMatch(execution -> isProcessed(execution))) {
+            return;
+        }
+        descendants.forEach(execution -> processor.getAuthenticationSession().setExecutionStatus(
+                execution.getId(), AuthenticationSessionModel.ExecutionStatus.FAILED));
+    }
+
+    private boolean isRepeatedOidc4acFactor(AuthenticationFactorPlan plan, int stepIndex, int branchIndex,
+            String executionId, AuthenticationExecutionModel factor) {
+        for (int priorStep = 0; priorStep <= stepIndex; priorStep++) {
+            int priorBranch = priorStep == stepIndex ? branchIndex
+                    : AuthenticationFactorPlanStore.activeBranch(processor.getAuthenticationSession(), plan, priorStep);
+            if (priorBranch >= plan.steps().get(priorStep).branches().size()) {
+                continue;
+            }
+            List<String> priorExecutions = plan.steps().get(priorStep).branches().get(priorBranch).executionIds();
+            for (String priorExecutionId : priorExecutions) {
+                if (priorStep == stepIndex && priorExecutionId.equals(executionId)) {
+                    return false;
+                }
+                AuthenticationExecutionModel previous = factorExecution(priorExecutionId);
+                if (!previous.getId().equals(factor.getId()) && previous.getFlowId() != null
+                        && previous.getFlowId().equals(factor.getFlowId())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private AuthenticationExecutionModel factorExecution(String executionId) {

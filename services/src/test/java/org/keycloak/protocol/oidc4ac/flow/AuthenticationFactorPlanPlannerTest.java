@@ -75,6 +75,21 @@ public class AuthenticationFactorPlanPlannerTest {
     }
 
     @Test
+    public void assignsRepeatedMethodLeavesToDistinctConfiguredExecutions() throws Exception {
+        AuthenticationFactorPlanResult result = planner.plan(request("""
+                {"id_token":{"amr_details":{"essential":true,"all_of":[
+                  {"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}},
+                  {"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null}}
+                ]}}}
+                """), "factors", List.of(
+                binding("pwd-flow-1", "pwd", 10),
+                binding("pwd-flow-2", "pwd", 15)));
+
+        assertFalse(result.essentialRequirementsUnplannable());
+        assertEquals(List.of("pwd-flow-1", "pwd-flow-2"), firstBranch(result).executionIds());
+    }
+
+    @Test
     public void refusesEssentialPropertyRequirementsWithoutACapableBinding() throws Exception {
         AuthenticationFactorPlanResult result = planner.plan(request("""
                 {"id_token":{"amr_details":{"essential":true,"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null},

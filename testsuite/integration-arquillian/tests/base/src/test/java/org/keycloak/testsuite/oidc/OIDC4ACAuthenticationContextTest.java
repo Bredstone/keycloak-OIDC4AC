@@ -25,16 +25,33 @@ import java.util.List;
 import java.util.Map;
 
 import org.keycloak.common.Profile;
+import org.keycloak.common.util.PemUtils;
+import org.keycloak.crypto.AesGcmContentEncryptionProvider;
+import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.RsaCekManagementProvider;
+import org.keycloak.jose.jwe.JWEConstants;
+import org.keycloak.protocol.oidc.OIDCAdvancedConfigWrapper;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.protocol.oidc.representations.OIDCConfigurationRepresentation;
+import org.keycloak.representations.AccessToken;
+import org.keycloak.representations.AuthorizationResponseToken;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.UserInfo;
+import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
+import org.keycloak.testsuite.admin.AdminApiUtil;
 import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
+import org.keycloak.testsuite.broker.util.SimpleHttpDefault;
+import org.keycloak.testsuite.client.resources.TestApplicationResourceUrls;
+import org.keycloak.testsuite.client.resources.TestOIDCEndpointsApplicationResource;
 import org.keycloak.testsuite.pages.AppPage;
 import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
 import org.keycloak.util.JsonSerialization;
+import org.keycloak.util.TokenUtil;
 
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -88,7 +105,114 @@ public class OIDC4ACAuthenticationContextTest extends AbstractOIDCScopeTest {
         assertEquals(idTokenDetail, refreshedDetail);
     }
 
+    @Test
+    public void authenticationDetailsAreNotCopiedToAccessToken() throws IOException {
+        AccessTokenResponse response = login(passwordClaimsRequest());
+        AccessToken accessToken = oauth.verifyToken(response.getAccessToken());
+        assertFalse(accessToken.getOtherClaims().containsKey("amr_details"));
+        assertFalse(accessToken.getOtherClaims().containsKey("amr"));
+    }
+
+    @Test
+    public void offlineRefreshRetainsTheAuthenticationSnapshot() throws IOException {
+        AccessTokenResponse response = login(passwordClaimsRequest(), "openid offline_access");
+        IDToken initial = oauth.verifyIDToken(response.getIdToken());
+        Map<String, Object> initialDetail = onlyAuthenticationDetail(initial);
+        AccessToken initialAccessToken = oauth.verifyToken(response.getAccessToken());
+        assertTrue(initialAccessToken.getScope().contains("offline_access"));
+        assertFalse(initialAccessToken.getOtherClaims().containsKey("amr_details"));
+
+        AccessTokenResponse refreshResponse = oauth.doRefreshTokenRequest(response.getRefreshToken());
+        assertEquals(200, refreshResponse.getStatusCode());
+        IDToken refreshed = oauth.verifyIDToken(refreshResponse.getIdToken());
+        assertEquals(initialDetail, onlyAuthenticationDetail(refreshed));
+        assertFalse(oauth.verifyToken(refreshResponse.getAccessToken()).getOtherClaims().containsKey("amr_details"));
+    }
+
+    @Test
+    public void realmSwitchGatesWellKnownOidc4acMetadata() throws IOException {
+        RealmRepresentation realm = managedRealm.admin().toRepresentation();
+        Map<String, String> attributes = new LinkedHashMap<>();
+        if (realm.getAttributes() != null) {
+            attributes.putAll(realm.getAttributes());
+        }
+        attributes.put("oidc4ac.enabled", "false");
+        realm.setAttributes(attributes);
+        managedRealm.admin().update(realm);
+        try (CloseableHttpClient client = HttpClientBuilder.create().build()) {
+            OIDCConfigurationRepresentation disabled = SimpleHttpDefault
+                    .doGet(getAuthServerRoot().toString() + "realms/test/.well-known/openid-configuration", client)
+                    .asJson(OIDCConfigurationRepresentation.class);
+            assertFalse(disabled.getClaimsSupported().contains("amr_details"));
+            assertFalse(disabled.getOtherClaims().containsKey("amr_identifiers_supported"));
+        } finally {
+            attributes.put("oidc4ac.enabled", "true");
+            realm.setAttributes(attributes);
+            managedRealm.admin().update(realm);
+        }
+    }
+
+    @Test
+    public void encryptedJarmPreservesGenericAuthenticationRequirementError() throws Exception {
+        TestOIDCEndpointsApplicationResource oidcClientEndpointsResource = testingClient.testApp().oidcClientEndpoints();
+        oidcClientEndpointsResource.generateKeys(JWEConstants.RSA_OAEP);
+
+        var clientResource = AdminApiUtil.findClientByClientId(adminClient.realm("test"), CLIENT_ID);
+        ClientRepresentation client = clientResource.toRepresentation();
+        OIDCAdvancedConfigWrapper config = OIDCAdvancedConfigWrapper.fromClientRepresentation(client);
+        config.setAuthorizationSignedResponseAlg(Algorithm.RS256);
+        config.setAuthorizationEncryptedResponseAlg(JWEConstants.RSA_OAEP);
+        config.setAuthorizationEncryptedResponseEnc(JWEConstants.A256GCM);
+        config.setUseJwksUrl(true);
+        config.setJwksUrl(TestApplicationResourceUrls.clientJwksUri());
+        clientResource.update(client);
+
+        try {
+            String state = "oidc4ac-encrypted-error-state";
+            String claims = JsonSerialization.writeValueAsString(Map.of(
+                    "id_token", Map.of("amr_details", Map.of(
+                            "essential", true,
+                            "amr_identifier", Map.of("value", "face"),
+                            "amr_metadata", Map.of("time", Map.of("essential", true))))));
+
+            oauth.responseMode("jwt");
+            AuthorizationEndpointResponse response = oauth.loginForm()
+                    .param(OIDCLoginProtocol.CLAIMS_PARAM, URLEncoder.encode(claims, StandardCharsets.UTF_8))
+                    .state(state)
+                    .doLogin("test-user@localhost", "password");
+
+            String encryptedResponse = response.getResponse();
+            String[] parts = encryptedResponse.split("\\.");
+            assertEquals(5, parts.length);
+            byte[] plaintext = TokenUtil.jweKeyEncryptionVerifyAndDecode(
+                    PemUtils.decodePrivateKey(oidcClientEndpointsResource.getKeysAsPem().get("privateKey")),
+                    encryptedResponse,
+                    new RsaCekManagementProvider(null, JWEConstants.RSA_OAEP).jweAlgorithmProvider(),
+                    new AesGcmContentEncryptionProvider(null, JWEConstants.A256GCM).jweEncryptionProvider());
+
+            AuthorizationResponseToken token = oauth.verifyAuthorizationResponseToken(
+                    new String(plaintext, StandardCharsets.UTF_8));
+            assertEquals("unmet_authentication_requirements", token.getOtherClaims().get("error"));
+            assertEquals(state, token.getOtherClaims().get("state"));
+            assertTrue(((String) token.getOtherClaims().get("error_description")).length() > 0);
+        } finally {
+            ClientRepresentation restored = clientResource.toRepresentation();
+            OIDCAdvancedConfigWrapper restoredConfig = OIDCAdvancedConfigWrapper.fromClientRepresentation(restored);
+            restoredConfig.setAuthorizationSignedResponseAlg(Algorithm.RS256);
+            restoredConfig.setAuthorizationEncryptedResponseAlg(null);
+            restoredConfig.setAuthorizationEncryptedResponseEnc(null);
+            restoredConfig.setUseJwksUrl(false);
+            restoredConfig.setJwksUrl(null);
+            clientResource.update(restored);
+        }
+    }
+
     private AccessTokenResponse login(Map<String, Object> claims) throws IOException {
+        return login(claims, "openid");
+    }
+
+    private AccessTokenResponse login(Map<String, Object> claims, String scope) throws IOException {
+        oauth.scope(scope);
         String claimsJson = JsonSerialization.writeValueAsString(claims);
         oauth.loginForm().param(OIDCLoginProtocol.CLAIMS_PARAM, URLEncoder.encode(claimsJson, StandardCharsets.UTF_8)).open();
         loginPage.assertCurrent();
@@ -111,7 +235,12 @@ public class OIDC4ACAuthenticationContextTest extends AbstractOIDCScopeTest {
         idTokenMethod.put("amr_metadata", Map.of("time", Map.of("essential", true)));
         idTokenMethod.put("amr_properties", properties);
 
-        Map<String, Object> userInfoMethod = Map.of("amr_identifier", Map.of("value", "pwd"));
+        // Every method expression is subject to the same structural grammar,
+        // including when it is requested only in UserInfo.  In particular,
+        // amr_metadata.time is mandatory for each method expression.
+        Map<String, Object> userInfoMethod = Map.of(
+                "amr_identifier", Map.of("value", "pwd"),
+                "amr_metadata", Map.of("time", Map.of("essential", true)));
         return Map.of(
                 "id_token", Map.of("amr_details", Map.of("essential", true, "amr_identifier", idTokenMethod.get("amr_identifier"),
                         "amr_metadata", idTokenMethod.get("amr_metadata"), "amr_properties", idTokenMethod.get("amr_properties"))),

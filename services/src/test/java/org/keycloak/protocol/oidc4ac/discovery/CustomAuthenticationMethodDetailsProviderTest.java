@@ -53,6 +53,8 @@ public class CustomAuthenticationMethodDetailsProviderTest {
         AuthenticationMethodDetails details = provider.describeSuccessfulExecution(context).orElseThrow();
         assertEquals("email", details.amrIdentifier());
         assertEquals("email", details.metadata().get("channel"));
+        assertEquals("urn:example:oidc4ac:email", details.metadata().get("trust_framework"));
+        assertEquals("aal2", details.metadata().get("assurance_level"));
         assertEquals("code", details.properties().orElseThrow().get("email_verification_method"));
 
         OIDCConfigurationRepresentation configuration = new OIDCConfigurationRepresentation();
@@ -61,7 +63,8 @@ public class CustomAuthenticationMethodDetailsProviderTest {
         assertEquals(List.of("email"), configuration.getOtherClaims().get("amr_identifiers_supported"));
         assertEquals(List.of("email_verification_method"),
                 configuration.getOtherClaims().get("email_properties_supported"));
-        assertEquals(List.of("channel"), configuration.getOtherClaims().get("email_metadata_supported"));
+        assertEquals(List.of("assurance_level", "channel", "trust_framework"),
+                configuration.getOtherClaims().get("email_metadata_supported"));
         assertEquals(List.of("code"), configuration.getOtherClaims().get("email_verification_method_values_supported"));
     }
 
@@ -69,7 +72,8 @@ public class CustomAuthenticationMethodDetailsProviderTest {
         @Override
         public java.util.Collection<AuthenticationMethodCapability> getCapabilities() {
             return List.of(new AuthenticationMethodCapability("email", Set.of("email_verification_method"),
-                    Set.of("channel"), Map.of("email_verification_method", Set.of("code"))));
+                    Set.of("channel", "trust_framework", "assurance_level"),
+                    Map.of("email_verification_method", Set.of("code"))));
         }
 
         @Override
@@ -80,7 +84,8 @@ public class CustomAuthenticationMethodDetailsProviderTest {
         @Override
         public Optional<AuthenticationMethodDetails> describeSuccessfulExecution(AuthenticationMethodDetailsContext context) {
             return Optional.of(new AuthenticationMethodDetails("email", context.executionTime(),
-                    Map.of("channel", "email"), Optional.of(Map.of("email_verification_method", "code"))));
+                    Map.of("channel", "email", "trust_framework", "urn:example:oidc4ac:email", "assurance_level", "aal2"),
+                    Optional.of(Map.of("email_verification_method", "code"))));
         }
 
         @Override

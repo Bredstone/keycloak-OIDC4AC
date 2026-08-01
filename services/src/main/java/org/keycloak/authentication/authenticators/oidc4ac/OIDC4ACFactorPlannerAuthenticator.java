@@ -59,6 +59,12 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
     static final OIDC4ACFactorPlannerAuthenticator SINGLETON = new OIDC4ACFactorPlannerAuthenticator();
     static final String FACTOR_FLOW_ALIAS = "factor_flow_alias";
     static final String FACTOR_ALIAS_PREFIX = "oidc4ac:";
+    /**
+     * Keycloak's admin API rejects ':' in flow aliases.  Imported realms can
+     * still use the protocol-friendly oidc4ac:&lt;identifier&gt; form, while
+     * administrator-created flows use this equivalent safe form.
+     */
+    static final String FACTOR_ALIAS_SAFE_PREFIX = "oidc4ac-";
 
     private OIDC4ACFactorPlannerAuthenticator() {
     }
@@ -189,10 +195,15 @@ public final class OIDC4ACFactorPlannerAuthenticator implements Authenticator {
     }
 
     private String identifierFor(AuthenticationFlowModel factor) {
-        if (factor == null || factor.getAlias() == null || !factor.getAlias().startsWith(FACTOR_ALIAS_PREFIX)) {
+        if (factor == null || factor.getAlias() == null) {
             return null;
         }
-        String identifier = factor.getAlias().substring(FACTOR_ALIAS_PREFIX.length());
+        String prefix = factor.getAlias().startsWith(FACTOR_ALIAS_PREFIX) ? FACTOR_ALIAS_PREFIX
+                : factor.getAlias().startsWith(FACTOR_ALIAS_SAFE_PREFIX) ? FACTOR_ALIAS_SAFE_PREFIX : null;
+        if (prefix == null) {
+            return null;
+        }
+        String identifier = factor.getAlias().substring(prefix.length());
         return identifier.isBlank() ? null : identifier;
     }
 
