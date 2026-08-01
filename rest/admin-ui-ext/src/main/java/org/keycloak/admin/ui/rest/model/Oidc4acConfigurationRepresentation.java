@@ -28,11 +28,8 @@ public class Oidc4acConfigurationRepresentation {
     private Boolean realmPolicyUpdate;
     private Boolean clientPolicyUpdate;
     private List<String> clientIds = new ArrayList<>();
-    private String realmDisclosureMode;
-    private String clientDisclosureMode;
-    private List<String> realmAllowedFields = new ArrayList<>();
-    private List<String> clientAllowedFields = new ArrayList<>();
-    private Map<String, List<String>> clientAllowedFieldsByClient = new LinkedHashMap<>();
+    private Map<String, String> realmDisclosureModes = new LinkedHashMap<>();
+    private Map<String, String> clientDisclosureModes = new LinkedHashMap<>();
 
     public String getBrowserFlowAlias() {
         return browserFlowAlias;
@@ -114,47 +111,23 @@ public class Oidc4acConfigurationRepresentation {
         this.clientIds = clientIds == null ? new ArrayList<>() : new ArrayList<>(clientIds);
     }
 
-    public String getRealmDisclosureMode() {
-        return realmDisclosureMode;
+    public Map<String, String> getRealmDisclosureModes() {
+        return realmDisclosureModes;
     }
 
-    public void setRealmDisclosureMode(String realmDisclosureMode) {
-        this.realmDisclosureMode = realmDisclosureMode;
+    public void setRealmDisclosureModes(Map<String, String> realmDisclosureModes) {
+        this.realmDisclosureModes = copyModes(realmDisclosureModes);
     }
 
-    public String getClientDisclosureMode() {
-        return clientDisclosureMode;
+    public Map<String, String> getClientDisclosureModes() {
+        return clientDisclosureModes;
     }
 
-    public void setClientDisclosureMode(String clientDisclosureMode) {
-        this.clientDisclosureMode = clientDisclosureMode;
+    public void setClientDisclosureModes(Map<String, String> clientDisclosureModes) {
+        this.clientDisclosureModes = copyModes(clientDisclosureModes);
     }
 
-    public List<String> getRealmAllowedFields() {
-        return realmAllowedFields;
-    }
-
-    public void setRealmAllowedFields(List<String> realmAllowedFields) {
-        this.realmAllowedFields = realmAllowedFields == null ? new ArrayList<>() : new ArrayList<>(realmAllowedFields);
-    }
-
-    public List<String> getClientAllowedFields() {
-        return clientAllowedFields;
-    }
-
-    public void setClientAllowedFields(List<String> clientAllowedFields) {
-        this.clientAllowedFields = clientAllowedFields == null ? new ArrayList<>() : new ArrayList<>(clientAllowedFields);
-    }
-
-    public Map<String, List<String>> getClientAllowedFieldsByClient() {
-        return clientAllowedFieldsByClient;
-    }
-
-    public void setClientAllowedFieldsByClient(Map<String, List<String>> clientAllowedFieldsByClient) {
-        this.clientAllowedFieldsByClient = new LinkedHashMap<>();
-        if (clientAllowedFieldsByClient != null) {
-            clientAllowedFieldsByClient.forEach((client, fields) -> this.clientAllowedFieldsByClient.put(client,
-                    fields == null ? new ArrayList<>() : new ArrayList<>(fields)));
-        }
+    private static Map<String, String> copyModes(Map<String, String> modes) {
+        return modes == null ? new LinkedHashMap<>() : new LinkedHashMap<>(modes);
     }
 }

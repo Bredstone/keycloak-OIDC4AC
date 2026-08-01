@@ -5,14 +5,11 @@ import {
   Card,
   CardBody,
   CardTitle,
-  Divider,
-  Form,
-  FormGroup,
   PageSection,
-  Radio,
+  Switch,
   Title,
 } from "@patternfly/react-core";
-import { useEnvironment } from "@keycloak/keycloak-ui-shared";
+import { useAlerts, useEnvironment } from "@keycloak/keycloak-ui-shared";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../admin-client";
@@ -24,41 +21,17 @@ import { addTrailingSlash } from "../util";
 import { getAuthorizationHeaders } from "../utils/getAuthorizationHeaders";
 import {
   capabilitiesFromDiscovery,
+  DEFAULT_DISCLOSURE_MODE,
+  disclosureModesFromCapabilities,
   DisclosureFields,
   type Capability,
+  type DisclosureMode as FieldDisclosureMode,
 } from "../authentication/policies/Oidc4acDisclosureFields";
 import style from "../authentication/policies/oidc4ac-policy.module.css";
 
-type ClientDisclosureMode = "inherit" | "selected" | "none";
-
 type Configuration = {
-  clientDisclosureMode?: ClientDisclosureMode;
-  clientAllowedFields?: string[];
+  clientDisclosureModes?: Record<string, FieldDisclosureMode>;
 };
-
-const modeOptions: Array<{
-  value: ClientDisclosureMode;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "inherit",
-    label: "Use the realm default",
-    description: "This client follows the realm disclosure policy.",
-  },
-  {
-    value: "selected",
-    label: "Allow only selected fields",
-    description:
-      "Only the fields selected below may be disclosed to this client.",
-  },
-  {
-    value: "none",
-    label: "Block optional fields",
-    description:
-      "This client receives only mandatory authentication-event fields.",
-  },
-];
 
 export function Oidc4acClientPolicy({
   client,
@@ -69,12 +42,15 @@ export function Oidc4acClientPolicy({
   const { realm } = useRealm();
   const { adminClient } = useAdminClient();
   const { environment } = useEnvironment<Environment>();
+  const { addAlert, addError } = useAlerts();
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
-  const [mode, setMode] = useState<ClientDisclosureMode>("inherit");
-  const [fields, setFields] = useState<Set<string>>(new Set());
+  const [overrideRealmPolicy, setOverrideRealmPolicy] = useState(false);
+  const [fieldModes, setFieldModes] = useState<
+    Record<string, FieldDisclosureMode>
+  >({});
   const [initial, setInitial] = useState({
-    mode: "inherit" as ClientDisclosureMode,
-    fields: [] as string[],
+    overrideRealmPolicy: false,
+    fieldModes: {} as Record<string, FieldDisclosureMode>,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,12 +73,21 @@ export function Oidc4acClientPolicy({
             (response) => response.json() as Promise<Record<string, unknown>>,
           ),
         ]);
-        const configuredMode = configResponse.clientDisclosureMode || "inherit";
-        const configuredFields = configResponse.clientAllowedFields || [];
-        setCapabilities(capabilitiesFromDiscovery(discoveryResponse));
-        setMode(configuredMode);
-        setFields(new Set(configuredFields));
-        setInitial({ mode: configuredMode, fields: configuredFields });
+        const discoveredCapabilities =
+          capabilitiesFromDiscovery(discoveryResponse);
+        const configuredModes = configResponse.clientDisclosureModes || {};
+        const initialModes = {
+          ...disclosureModesFromCapabilities(discoveredCapabilities),
+          ...configuredModes,
+        };
+        const hasOverride = Object.keys(configuredModes).length > 0;
+        setCapabilities(discoveredCapabilities);
+        setOverrideRealmPolicy(hasOverride);
+        setFieldModes(initialModes);
+        setInitial({
+          overrideRealmPolicy: hasOverride,
+          fieldModes: initialModes,
+        });
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
@@ -111,13 +96,15 @@ export function Oidc4acClientPolicy({
     })();
   }, [adminClient, endpoint, environment.serverBaseUrl, realm]);
 
-  const toggleField = (path: string) =>
-    setFields((current) => {
-      const next = new Set(current);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
+  const changeFieldMode = (path: string, fieldMode: FieldDisclosureMode) =>
+    setFieldModes((current) => ({ ...current, [path]: fieldMode }));
+
+  const setOverride = (override: boolean) => {
+    setOverrideRealmPolicy(override);
+    if (override && Object.keys(fieldModes).length === 0) {
+      setFieldModes(disclosureModesFromCapabilities(capabilities));
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -134,15 +121,16 @@ export function Oidc4acClientPolicy({
           body: JSON.stringify({
             clientId: client.clientId,
             clientIds: [client.clientId],
-            clientDisclosureMode: mode,
-            clientAllowedFields: Array.from(fields),
+            clientDisclosureModes: overrideRealmPolicy ? fieldModes : {},
             realmPolicyUpdate: false,
             clientPolicyUpdate: true,
           }),
         },
       );
-      setInitial({ mode, fields: Array.from(fields) });
+      setInitial({ overrideRealmPolicy, fieldModes });
+      addAlert(t("itemSaveSuccessful"));
     } catch (cause) {
+      addError("itemSaveError", cause);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setSaving(false);
@@ -150,8 +138,8 @@ export function Oidc4acClientPolicy({
   };
 
   const reset = () => {
-    setMode(initial.mode);
-    setFields(new Set(initial.fields));
+    setOverrideRealmPolicy(initial.overrideRealmPolicy);
+    setFieldModes(initial.fieldModes);
     setError(undefined);
   };
 
@@ -175,52 +163,45 @@ export function Oidc4acClientPolicy({
         className={style.fullWidthForm}
         fineGrainedAccess={client.access?.configure}
         role="manage-clients"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
       >
-        <Form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <Card>
-            <CardTitle>Client disclosure policy</CardTitle>
-            <CardBody>
-              <p className="pf-v5-u-mb-lg">
-                Control which optional authentication-method metadata and
-                properties this client may receive. Mandatory identifiers and
-                execution times are always preserved.
-              </p>
-              <FormGroup label="Client policy" fieldId="oidc4ac-client-mode">
-                {modeOptions.map((option) => (
-                  <Radio
-                    key={option.value}
-                    id={`oidc4ac-client-mode-${option.value}`}
-                    name="oidc4ac-client-mode"
-                    label={option.label}
-                    description={option.description}
-                    isChecked={mode === option.value}
-                    onChange={() => setMode(option.value)}
-                    isDisabled={loading}
-                  />
-                ))}
-              </FormGroup>
-              <Divider className="pf-v5-u-my-lg" />
-              <DisclosureFields
-                capabilities={capabilities}
-                selected={fields}
-                onToggle={toggleField}
-                disabled={loading || mode !== "selected"}
-                idPrefix="oidc4ac-client-field"
-              />
-            </CardBody>
-          </Card>
-          <FixedButtonsGroup
-            name="oidc4ac-client-policy"
-            save={save}
-            reset={reset}
-            isDisabled={loading || saving}
+        <Card>
+          <CardTitle>Client disclosure policy</CardTitle>
+          <CardBody>
+            <p className="pf-v5-u-mb-lg">
+              Control which optional authentication-method metadata and
+              properties this client may receive. Mandatory identifiers and
+              execution times are always preserved.
+            </p>
+            <Switch
+              id="oidc4ac-client-override-realm-policy"
+              label="Override realm disclosure settings for this client"
+              labelOff="Use realm disclosure settings"
+              isChecked={overrideRealmPolicy}
+              onChange={(_, checked) => setOverride(checked)}
+              isDisabled={loading}
+            />
+          </CardBody>
+        </Card>
+        <div className="pf-v5-u-mt-md">
+          <DisclosureFields
+            capabilities={capabilities}
+            modes={fieldModes}
+            fallbackMode={DEFAULT_DISCLOSURE_MODE}
+            onModeChange={changeFieldMode}
+            disabled={loading || !overrideRealmPolicy}
+            idPrefix="oidc4ac-client-field"
           />
-        </Form>
+        </div>
+        <FixedButtonsGroup
+          name="oidc4ac-client-policy"
+          reset={reset}
+          isSubmit
+          isDisabled={loading || saving}
+        />
       </FormAccess>
     </PageSection>
   );

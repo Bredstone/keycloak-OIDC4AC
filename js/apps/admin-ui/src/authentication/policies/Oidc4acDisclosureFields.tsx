@@ -1,19 +1,26 @@
 import {
-  Checkbox,
-  Divider,
+  Card,
+  CardBody,
+  CardTitle,
   EmptyState,
   EmptyStateBody,
-  Grid,
-  GridItem,
+  Flex,
+  FlexItem,
   HelperText,
   HelperTextItem,
   Label,
+  List,
+  ListItem,
+  MenuToggle,
+  Select,
+  SelectList,
+  SelectOption,
   Tab,
   Tabs,
   TabTitleText,
-  Title,
 } from "@patternfly/react-core";
 import { useEffect, useState } from "react";
+import style from "./oidc4ac-policy.module.css";
 
 export type Discovery = Record<string, unknown>;
 export type Capability = {
@@ -28,6 +35,32 @@ export type DisclosureField = {
   name: string;
   values: string[];
 };
+
+export type DisclosureMode = "default" | "requested" | "never";
+
+export const DEFAULT_DISCLOSURE_MODE: DisclosureMode = "requested";
+
+export const DISCLOSURE_MODE_OPTIONS: Array<{
+  value: DisclosureMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "default",
+    label: "By default",
+    description: "Include when no field-specific request is present.",
+  },
+  {
+    value: "requested",
+    label: "Only when requested",
+    description: "Include only when the client asks for this field.",
+  },
+  {
+    value: "never",
+    label: "Never",
+    description: "Do not disclose, including for essential requests.",
+  },
+];
 
 const asStrings = (value: unknown): string[] =>
   Array.isArray(value)
@@ -69,68 +102,141 @@ const propertyFieldsFor = (capability: Capability): DisclosureField[] =>
     values: capability.values[name],
   }));
 
-const FieldGrid = ({
+export const disclosureModesFromCapabilities = (
+  capabilities: Capability[],
+  mode: DisclosureMode = DEFAULT_DISCLOSURE_MODE,
+): Record<string, DisclosureMode> =>
+  Object.fromEntries(
+    capabilities.flatMap((capability) => [
+      ...capability.metadata
+        .filter((name) => name !== "time")
+        .map((name) => [`amr_metadata.${name}`, mode] as const),
+      ...capability.properties.map(
+        (name) => [`amr_properties.${name}`, mode] as const,
+      ),
+    ]),
+  );
+
+const FieldList = ({
   fields,
-  selected,
-  onToggle,
+  modes,
+  fallbackMode,
+  onModeChange,
   disabled,
   idPrefix,
   capability,
 }: {
   fields: DisclosureField[];
-  selected: Set<string>;
-  onToggle: (path: string) => void;
+  modes: Record<string, DisclosureMode>;
+  fallbackMode: DisclosureMode;
+  onModeChange: (path: string, mode: DisclosureMode) => void;
   disabled: boolean;
   idPrefix: string;
   capability: string;
-}) => (
-  <Grid hasGutter className="pf-v5-u-mt-md">
-    {fields.map((field) => (
-      <GridItem key={field.path} span={6}>
-        <Checkbox
-          id={`${idPrefix}-${capability}-${field.name}`}
-          label={
-            <>
-              <code>{field.path}</code>
-              {field.values.length > 0 && (
-                <span className="pf-v5-u-ml-sm">
-                  {field.values.map((value) => (
-                    <Label
-                      key={value}
-                      isCompact
-                      color="blue"
-                      className="pf-v5-u-mr-xs"
+}) => {
+  const [open, setOpen] = useState<string>();
+
+  return (
+    <List isPlain isBordered className="pf-v5-u-mt-md">
+      {fields.map((field) => {
+        const selected = modes[field.path] ?? fallbackMode;
+        return (
+          <ListItem key={field.path}>
+            <Flex
+              alignItems={{ default: "alignItemsCenter" }}
+              spaceItems={{ default: "spaceItemsMd" }}
+            >
+              <FlexItem flex={{ default: "flex_1" }}>
+                <code className={style.fieldName}>{field.path}</code>
+                {field.values.length > 0 && (
+                  <span className="pf-v5-u-ml-sm">
+                    {field.values.map((value) => (
+                      <Label
+                        key={value}
+                        isCompact
+                        color="blue"
+                        className="pf-v5-u-mr-xs"
+                      >
+                        {value}
+                      </Label>
+                    ))}
+                  </span>
+                )}
+              </FlexItem>
+              <FlexItem>
+                <Select
+                  id={`${idPrefix}-${capability}-${field.name}`}
+                  isOpen={open === field.path}
+                  popperProps={{
+                    appendTo: document.body,
+                    maxWidth: "calc(100vw - 2rem)",
+                    position: "end",
+                    preventOverflow: true,
+                  }}
+                  onOpenChange={(isOpen) =>
+                    setOpen(isOpen ? field.path : undefined)
+                  }
+                  selected={selected}
+                  onSelect={(_, value) => {
+                    onModeChange(field.path, value as DisclosureMode);
+                    setOpen(undefined);
+                  }}
+                  toggle={(ref) => (
+                    <MenuToggle
+                      ref={ref}
+                      isExpanded={open === field.path}
+                      isDisabled={disabled}
+                      onClick={() =>
+                        setOpen(open === field.path ? undefined : field.path)
+                      }
                     >
-                      {value}
-                    </Label>
-                  ))}
-                </span>
-              )}
-            </>
-          }
-          isChecked={selected.has(field.path)}
-          isDisabled={disabled}
-          onChange={() => onToggle(field.path)}
-        />
-      </GridItem>
-    ))}
-  </Grid>
-);
+                      {DISCLOSURE_MODE_OPTIONS.find(
+                        (option) => option.value === selected,
+                      )?.label ?? selected}
+                    </MenuToggle>
+                  )}
+                >
+                  <SelectList>
+                    {DISCLOSURE_MODE_OPTIONS.map((option) => (
+                      <SelectOption
+                        key={option.value}
+                        value={option.value}
+                        isSelected={selected === option.value}
+                        description={option.description}
+                      >
+                        {option.label}
+                      </SelectOption>
+                    ))}
+                  </SelectList>
+                </Select>
+              </FlexItem>
+            </Flex>
+          </ListItem>
+        );
+      })}
+    </List>
+  );
+};
 
 export function DisclosureFields({
   capabilities,
-  selected,
-  onToggle,
+  modes,
+  fallbackMode,
+  onModeChange,
   disabled,
+  isDisabled = false,
   idPrefix,
 }: {
   capabilities: Capability[];
-  selected: Set<string>;
-  onToggle: (path: string) => void;
+  modes: Record<string, DisclosureMode>;
+  fallbackMode: DisclosureMode;
+  onModeChange: (path: string, mode: DisclosureMode) => void;
   disabled: boolean;
+  isDisabled?: boolean;
   idPrefix: string;
 }) {
   const [active, setActive] = useState(capabilities[0]?.identifier || "");
+  const fieldsDisabled = disabled || isDisabled;
 
   useEffect(() => {
     if (!capabilities.some((capability) => capability.identifier === active)) {
@@ -153,78 +259,92 @@ export function DisclosureFields({
 
   return (
     <>
-      <Title headingLevel="h3" size="lg" className="pf-v5-u-mb-sm">
-        Optional metadata
-      </Title>
-      <p className="pf-v5-u-mb-md">
-        Metadata describes the authentication event and applies to every
-        authentication method. The mandatory <code>amr_metadata.time</code>{" "}
-        value is always retained.
-      </p>
-      <HelperText>
-        <HelperTextItem>
-          <strong>amr_identifier</strong> and <strong>amr_metadata.time</strong>{" "}
-          are always preserved and are not configurable here.
-        </HelperTextItem>
-      </HelperText>
-      {metadataFields.length > 0 ? (
-        <FieldGrid
-          fields={metadataFields}
-          selected={selected}
-          onToggle={onToggle}
-          disabled={disabled}
-          idPrefix={idPrefix}
-          capability="metadata"
-        />
-      ) : (
-        <p className="pf-v5-u-mt-md">No optional metadata was advertised.</p>
-      )}
-      <Divider className="pf-v5-u-my-lg" />
-      <Title headingLevel="h3" size="lg" className="pf-v5-u-mb-sm">
-        Authentication method properties
-      </Title>
-      <p className="pf-v5-u-mb-md">
-        Properties describe the method or credential used for each execution.
-        Select a method to configure its optional properties.
-      </p>
-      <Tabs
-        activeKey={active}
-        onSelect={(_, key) => setActive(key as string)}
-        mountOnEnter
-        unmountOnExit
-      >
-        {capabilities.map((capability) => {
-          const propertyFields = propertyFieldsFor(capability);
-          return (
-            <Tab
-              key={capability.identifier}
-              eventKey={capability.identifier}
-              id={`${idPrefix}-${capability.identifier}`}
-              title={<TabTitleText>{capability.identifier}</TabTitleText>}
-            >
-              <div className="pf-v5-u-pt-md">
-                <p className="pf-v5-u-mb-md">
-                  Select optional properties that may be disclosed for{" "}
-                  <strong>{capability.identifier}</strong>. Enumerated values
-                  are shown beside each property.
-                </p>
-                {propertyFields.length > 0 ? (
-                  <FieldGrid
-                    fields={propertyFields}
-                    selected={selected}
-                    onToggle={onToggle}
-                    disabled={disabled}
-                    idPrefix={idPrefix}
-                    capability={capability.identifier}
-                  />
-                ) : (
-                  <p>This method has no optional properties advertised.</p>
-                )}
-              </div>
-            </Tab>
-          );
-        })}
-      </Tabs>
+      <Card>
+        <CardTitle>Optional metadata</CardTitle>
+        <CardBody>
+          <p className="pf-v5-u-mb-md">
+            Metadata describes the authentication event and applies to every
+            authentication method. The mandatory <code>amr_metadata.time</code>{" "}
+            value is always retained.
+          </p>
+          <p className="pf-v5-u-mb-md">
+            For each optional field, choose whether it is disclosed by default,
+            only when requested, or never.
+          </p>
+          <HelperText>
+            <HelperTextItem>
+              <strong>amr_identifier</strong> and{" "}
+              <strong>amr_metadata.time</strong> are always preserved and are
+              not configurable here.
+            </HelperTextItem>
+          </HelperText>
+          {metadataFields.length > 0 ? (
+            <FieldList
+              fields={metadataFields}
+              modes={modes}
+              fallbackMode={fallbackMode}
+              onModeChange={onModeChange}
+              disabled={fieldsDisabled}
+              idPrefix={idPrefix}
+              capability="metadata"
+            />
+          ) : (
+            <p className="pf-v5-u-mt-md">
+              No optional metadata was advertised.
+            </p>
+          )}
+        </CardBody>
+      </Card>
+      <Card className="pf-v5-u-mt-md">
+        <CardTitle>Authentication method properties</CardTitle>
+        <CardBody>
+          <p className="pf-v5-u-mb-md">
+            Properties describe the method or credential used for each
+            execution. Select a method to configure its optional properties.
+            Each field can be disclosed by default, only when requested, or
+            never.
+          </p>
+          <Tabs
+            activeKey={active}
+            onSelect={(_, key) => setActive(key as string)}
+            mountOnEnter
+            unmountOnExit
+          >
+            {capabilities.map((capability) => {
+              const propertyFields = propertyFieldsFor(capability);
+              return (
+                <Tab
+                  key={capability.identifier}
+                  eventKey={capability.identifier}
+                  id={`${idPrefix}-${capability.identifier}`}
+                  title={<TabTitleText>{capability.identifier}</TabTitleText>}
+                >
+                  <div className="pf-v5-u-pt-md">
+                    <p className="pf-v5-u-mb-md">
+                      Select optional properties that may be disclosed for{" "}
+                      <strong>{capability.identifier}</strong>. Enumerated
+                      values are shown beside each property.
+                    </p>
+                    {propertyFields.length > 0 ? (
+                      <FieldList
+                        fields={propertyFields}
+                        modes={modes}
+                        fallbackMode={fallbackMode}
+                        onModeChange={onModeChange}
+                        disabled={fieldsDisabled}
+                        idPrefix={idPrefix}
+                        capability={capability.identifier}
+                      />
+                    ) : (
+                      <p>This method has no optional properties advertised.</p>
+                    )}
+                  </div>
+                </Tab>
+              );
+            })}
+          </Tabs>
+        </CardBody>
+      </Card>
     </>
   );
 }

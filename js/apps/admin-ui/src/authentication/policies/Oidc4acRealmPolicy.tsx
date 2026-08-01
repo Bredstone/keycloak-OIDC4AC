@@ -4,64 +4,37 @@ import {
   Card,
   CardBody,
   CardTitle,
-  Divider,
-  Form,
-  FormGroup,
   HelperText,
   HelperTextItem,
   PageSection,
-  Radio,
   Title,
 } from "@patternfly/react-core";
-import { useEnvironment } from "@keycloak/keycloak-ui-shared";
+import { useAlerts, useEnvironment } from "@keycloak/keycloak-ui-shared";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../../admin-client";
 import { FixedButtonsGroup } from "../../components/form/FixedButtonGroup";
+import { FormAccess } from "../../components/form/FormAccess";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import type { Environment } from "../../environment-types";
 import { addTrailingSlash } from "../../util";
 import { getAuthorizationHeaders } from "../../utils/getAuthorizationHeaders";
 import {
   capabilitiesFromDiscovery,
+  DEFAULT_DISCLOSURE_MODE,
+  disclosureModesFromCapabilities,
   DisclosureFields,
   type Capability,
+  type DisclosureMode as FieldDisclosureMode,
 } from "./Oidc4acDisclosureFields";
 import style from "./oidc4ac-policy.module.css";
-
-type DisclosureMode = "all" | "selected" | "none";
-
-const modeOptions: Array<{
-  value: DisclosureMode;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "all",
-    label: "Allow all supported optional fields",
-    description:
-      "The OP may disclose optional metadata and properties supported by each method.",
-  },
-  {
-    value: "selected",
-    label: "Allow only selected fields",
-    description: "Only the fields selected below may be disclosed.",
-  },
-  {
-    value: "none",
-    label: "Do not disclose optional fields",
-    description:
-      "Only mandatory amr_identifier and amr_metadata.time remain available.",
-  },
-];
 
 type Configuration = {
   enabled?: boolean;
   browserFlowAlias?: string;
   factorFlowAlias?: string;
   plannerConfigured?: boolean;
-  realmDisclosureMode?: DisclosureMode;
-  realmAllowedFields?: string[];
+  realmDisclosureModes?: Record<string, FieldDisclosureMode>;
 };
 
 export function Oidc4acRealmPolicy() {
@@ -69,15 +42,16 @@ export function Oidc4acRealmPolicy() {
   const { realm } = useRealm();
   const { adminClient } = useAdminClient();
   const { environment } = useEnvironment<Environment>();
+  const { addAlert, addError } = useAlerts();
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
   const [planner, setPlanner] = useState<Configuration>();
-  const [realmMode, setRealmMode] = useState<DisclosureMode>("all");
-  const [realmFields, setRealmFields] = useState<Set<string>>(new Set());
+  const [realmFieldModes, setRealmFieldModes] = useState<
+    Record<string, FieldDisclosureMode>
+  >({});
   const [enabled, setEnabled] = useState(true);
-  const [initial, setInitial] = useState({
-    mode: "all" as DisclosureMode,
-    fields: [] as string[],
-  });
+  const [initial, setInitial] = useState<Record<string, FieldDisclosureMode>>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -99,15 +73,19 @@ export function Oidc4acRealmPolicy() {
             (response) => response.json() as Promise<Record<string, unknown>>,
           ),
         ]);
-        const mode = configResponse.realmDisclosureMode || "all";
-        const fields = configResponse.realmAllowedFields || [];
+        const discoveredCapabilities =
+          capabilitiesFromDiscovery(discoveryResponse);
+        const configuredModes = configResponse.realmDisclosureModes || {};
+        const initialModes = {
+          ...disclosureModesFromCapabilities(discoveredCapabilities),
+          ...configuredModes,
+        };
         const oidc4acEnabled = configResponse.enabled ?? true;
         setPlanner(configResponse);
-        setCapabilities(capabilitiesFromDiscovery(discoveryResponse));
-        setRealmMode(mode);
-        setRealmFields(new Set(fields));
+        setCapabilities(discoveredCapabilities);
+        setRealmFieldModes(initialModes);
         setEnabled(oidc4acEnabled);
-        setInitial({ mode, fields });
+        setInitial(initialModes);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
@@ -116,13 +94,8 @@ export function Oidc4acRealmPolicy() {
     })();
   }, [adminClient, endpoint, environment.serverBaseUrl, realm]);
 
-  const toggleField = (path: string) =>
-    setRealmFields((current) => {
-      const next = new Set(current);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
+  const changeFieldMode = (path: string, fieldMode: FieldDisclosureMode) =>
+    setRealmFieldModes((current) => ({ ...current, [path]: fieldMode }));
 
   const save = async () => {
     setSaving(true);
@@ -135,17 +108,15 @@ export function Oidc4acRealmPolicy() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          realmDisclosureMode: realmMode,
-          realmAllowedFields: Array.from(realmFields),
+          realmDisclosureModes: realmFieldModes,
           realmPolicyUpdate: true,
           clientPolicyUpdate: false,
         }),
       });
-      setInitial({
-        mode: realmMode,
-        fields: Array.from(realmFields),
-      });
+      setInitial(realmFieldModes);
+      addAlert(t("itemSaveSuccessful"));
     } catch (cause) {
+      addError("itemSaveError", cause);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setSaving(false);
@@ -153,8 +124,7 @@ export function Oidc4acRealmPolicy() {
   };
 
   const reset = () => {
-    setRealmMode(initial.mode);
-    setRealmFields(new Set(initial.fields));
+    setRealmFieldModes(initial);
     setError(undefined);
   };
 
@@ -173,7 +143,7 @@ export function Oidc4acRealmPolicy() {
           {error}
         </Alert>
       )}
-      <Card className="pf-v5-u-mb-lg">
+      <Card className="pf-v5-u-mb-md">
         <CardTitle>Authentication planner status</CardTitle>
         <CardBody>
           {!enabled ? (
@@ -215,47 +185,31 @@ export function Oidc4acRealmPolicy() {
         </CardBody>
       </Card>
 
-      <Form
+      <FormAccess
         className={style.fullWidthForm}
+        role="manage-realm"
         onSubmit={(event) => {
           event.preventDefault();
           void save();
         }}
       >
-        <Card>
-          <CardTitle>Realm disclosure policy</CardTitle>
-          <CardBody>
-            <FormGroup label="Realm default" fieldId="oidc4ac-realm-mode">
-              {modeOptions.map((option) => (
-                <Radio
-                  key={option.value}
-                  id={`oidc4ac-realm-mode-${option.value}`}
-                  name="oidc4ac-realm-mode"
-                  label={option.label}
-                  description={option.description}
-                  isChecked={realmMode === option.value}
-                  onChange={() => setRealmMode(option.value)}
-                  isDisabled={loading}
-                />
-              ))}
-            </FormGroup>
-            <Divider className="pf-v5-u-my-lg" />
-            <DisclosureFields
-              capabilities={capabilities}
-              selected={realmFields}
-              onToggle={toggleField}
-              disabled={loading || realmMode !== "selected"}
-              idPrefix="oidc4ac-realm-field"
-            />
-          </CardBody>
-        </Card>
+        <div className="pf-v5-u-mt-md">
+          <DisclosureFields
+            capabilities={capabilities}
+            modes={realmFieldModes}
+            fallbackMode={DEFAULT_DISCLOSURE_MODE}
+            onModeChange={changeFieldMode}
+            disabled={loading}
+            idPrefix="oidc4ac-realm-field"
+          />
+        </div>
         <FixedButtonsGroup
           name="oidc4ac-realm-policy"
-          save={save}
           reset={reset}
+          isSubmit
           isDisabled={loading || saving}
         />
-      </Form>
+      </FormAccess>
     </PageSection>
   );
 }

@@ -90,7 +90,7 @@ public final class AmrDetailsProjection {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("time", execution.executionTime().toString());
         execution.metadata().forEach((name, value) -> {
-            if (policy.allows("amr_metadata." + name)) {
+            if (policy.allowsByDefault("amr_metadata." + name)) {
                 metadata.put(name, jsonValue(value));
             }
         });
@@ -98,11 +98,13 @@ public final class AmrDetailsProjection {
         execution.properties().ifPresent(properties -> {
             Map<String, Object> values = new LinkedHashMap<>();
             properties.forEach((name, value) -> {
-                if (policy.allows("amr_properties." + name)) {
+                if (policy.allowsByDefault("amr_properties." + name)) {
                     values.put(name, jsonValue(value));
                 }
             });
-            detail.put("amr_properties", Map.copyOf(values));
+            if (!values.isEmpty()) {
+                detail.put("amr_properties", Map.copyOf(values));
+            }
         });
         return Map.copyOf(detail);
     }

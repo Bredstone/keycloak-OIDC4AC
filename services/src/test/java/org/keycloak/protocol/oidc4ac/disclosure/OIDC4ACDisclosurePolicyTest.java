@@ -7,6 +7,7 @@
  */
 package org.keycloak.protocol.oidc4ac.disclosure;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -80,6 +81,39 @@ public class OIDC4ACDisclosurePolicyTest {
         Map<String, Object> metadata = (Map<String, Object>) detail.get("amr_metadata");
         assertTrue(metadata.containsKey("time"));
         assertFalse(detail.containsKey("amr_properties"));
+    }
+
+    @Test
+    public void perFieldModesDistinguishDefaultRequestedAndNever() {
+        OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forAttributeValues(
+                "default:amr_metadata.issuer,requested:amr_properties.pwd_iterations,never:amr_properties.pwd_derivation_algorithm",
+                OIDC4ACDisclosurePolicy.WILDCARD);
+
+        assertTrue(policy.allowsByDefault("amr_metadata.issuer"));
+        assertFalse(policy.allowsByDefault("amr_properties.pwd_iterations"));
+        assertTrue(policy.allows("amr_properties.pwd_iterations"));
+        assertFalse(policy.allows("amr_properties.pwd_derivation_algorithm"));
+        assertFalse(policy.allows("amr_properties.unconfigured"));
+    }
+
+    @Test
+    public void realmAndClientModesUseMostRestrictiveValue() {
+        OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forAttributeValues(
+                "default:amr_metadata.issuer,requested:amr_properties.pwd_iterations",
+                "default:amr_metadata.issuer,never:amr_properties.pwd_iterations");
+
+        assertTrue(policy.allowsByDefault("amr_metadata.issuer"));
+        assertFalse(policy.allows("amr_properties.pwd_iterations"));
+    }
+
+    @Test
+    public void explicitModesRoundTripThroughTheStoredRepresentation() {
+        Map<String, String> modes = Map.of(
+                "amr_metadata.issuer", OIDC4ACDisclosurePolicy.MODE_DEFAULT,
+                "amr_properties.pwd_iterations", OIDC4ACDisclosurePolicy.MODE_REQUESTED,
+                "amr_properties.pwd_derivation_algorithm", OIDC4ACDisclosurePolicy.MODE_NEVER);
+
+        assertEquals(modes, OIDC4ACDisclosurePolicy.parseModes(OIDC4ACDisclosurePolicy.serializeModes(modes)));
     }
 
     private static AmrDetailsClaimRequest request() throws Exception {

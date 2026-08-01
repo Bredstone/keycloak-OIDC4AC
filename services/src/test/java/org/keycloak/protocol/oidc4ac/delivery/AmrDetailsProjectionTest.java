@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.junit.Test;
+import org.keycloak.protocol.oidc4ac.disclosure.OIDC4ACDisclosurePolicy;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationEvent;
 import org.keycloak.protocol.oidc4ac.model.AuthenticationMethodExecution;
 import org.keycloak.protocol.oidc4ac.request.AmrDetailsClaimRequest;
@@ -113,6 +114,34 @@ public class AmrDetailsProjectionTest {
                 .get("amr_metadata");
 
         assertEquals(Map.of("ip_address", "203.0.113.7"), metadata.get("location"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void perFieldModesControlDefaultAndRequestedProjection() throws Exception {
+        AuthenticationEvent event = new AuthenticationEvent(List.of(new AuthenticationMethodExecution("pwd",
+                Instant.parse("2026-07-25T12:00:00Z"), Map.of("issuer", text("local")),
+                Optional.of(Map.of("pwd_iterations", text("210000"),
+                        "pwd_derivation_algorithm", text("argon2id"))))));
+        OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forAttributeValues(
+                "default:amr_metadata.issuer,requested:amr_properties.pwd_iterations,never:amr_properties.pwd_derivation_algorithm",
+                OIDC4ACDisclosurePolicy.WILDCARD);
+        AmrDetailsClaimRequest unconstrained = AmrDetailsRequestParser.parseClaimsParameter(
+                "{\"id_token\":{\"amr_details\":null}}").idToken().orElseThrow();
+
+        Map<String, Object> defaultDetail = AmrDetailsProjection.project(unconstrained, event, policy).get(0);
+        Map<String, Object> defaultMetadata = (Map<String, Object>) defaultDetail.get("amr_metadata");
+        assertEquals("local", defaultMetadata.get("issuer"));
+        assertFalse(defaultDetail.containsKey("amr_properties"));
+
+        AmrDetailsClaimRequest requested = AmrDetailsRequestParser.parseClaimsParameter("""
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"pwd"},"amr_metadata":{"time":null},
+                "amr_properties":{"pwd_iterations":null,"pwd_derivation_algorithm":null}}}}
+                """).idToken().orElseThrow();
+        Map<String, Object> requestedDetail = AmrDetailsProjection.project(requested, event, policy).get(0);
+        Map<String, Object> requestedProperties = (Map<String, Object>) requestedDetail.get("amr_properties");
+        assertEquals("210000", requestedProperties.get("pwd_iterations"));
+        assertFalse(requestedProperties.containsKey("pwd_derivation_algorithm"));
     }
 
     private static com.fasterxml.jackson.databind.JsonNode text(String value) {

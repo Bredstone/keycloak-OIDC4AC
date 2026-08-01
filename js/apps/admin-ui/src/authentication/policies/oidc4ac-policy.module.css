@@ -14,3 +14,8 @@ form.fullWidthForm {
   width: 100%;
   max-width: none;
 }
+
+.fieldName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
