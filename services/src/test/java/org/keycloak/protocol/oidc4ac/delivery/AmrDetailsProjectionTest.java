@@ -145,6 +145,24 @@ public class AmrDetailsProjectionTest {
         assertFalse(requestedProperties.containsKey("pwd_derivation_algorithm"));
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void defaultFieldsAreIncludedForARequestedMethodWithoutFieldConstraints() throws Exception {
+        AuthenticationEvent event = new AuthenticationEvent(List.of(new AuthenticationMethodExecution("pwd",
+                Instant.parse("2026-07-25T12:00:00Z"), Map.of("issuer", text("local")),
+                Optional.of(Map.of("pwd_iterations", text("210000"))))));
+        OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.forAttributeValues(
+                "default:amr_metadata.issuer,default:amr_properties.pwd_iterations", null);
+        AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
+                {"id_token":{"amr_details":{"amr_identifier":{"value":"pwd"},
+                "amr_metadata":{"time":null}}}}
+                """).idToken().orElseThrow();
+
+        Map<String, Object> detail = AmrDetailsProjection.project(request, event, policy).get(0);
+        assertEquals("local", ((Map<String, Object>) detail.get("amr_metadata")).get("issuer"));
+        assertEquals("210000", ((Map<String, Object>) detail.get("amr_properties")).get("pwd_iterations"));
+    }
+
     private static com.fasterxml.jackson.databind.JsonNode text(String value) {
         return JsonSerialization.mapper.valueToTree(value);
     }

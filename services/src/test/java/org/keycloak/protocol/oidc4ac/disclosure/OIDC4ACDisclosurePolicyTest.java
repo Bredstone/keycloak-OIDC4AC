@@ -107,6 +107,16 @@ public class OIDC4ACDisclosurePolicyTest {
         assertTrue(policy.allows("amr_properties.pwd_iterations"));
         assertFalse(policy.allows("amr_properties.pwd_derivation_algorithm"));
         assertFalse(policy.allows("amr_properties.unconfigured"));
+        assertTrue(policy.hasExplicitDefault("amr_metadata.issuer"));
+        assertFalse(policy.hasExplicitDefault("amr_properties.unconfigured"));
+    }
+
+    @Test
+    public void permissivePolicyDoesNotTreatAnUnsetFieldAsExplicitDefaultForConstrainedRequests() {
+        OIDC4ACDisclosurePolicy policy = OIDC4ACDisclosurePolicy.permissive();
+
+        assertTrue(policy.allowsByDefault("amr_metadata.issuer"));
+        assertFalse(policy.hasExplicitDefault("amr_metadata.issuer"));
     }
 
     @Test

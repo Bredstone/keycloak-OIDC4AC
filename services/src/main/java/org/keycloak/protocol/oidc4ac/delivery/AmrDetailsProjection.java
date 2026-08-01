@@ -64,9 +64,10 @@ public final class AmrDetailsProjection {
             // An expression constrains/evaluates the event but cannot redact a
             // method execution from the complete Authentication Event Claim.
             // Fields for an unmentioned method are empty, so only the required
-            // identifier and time are delivered for that execution.
-            result.add(requestedDetail(execution,
-                    requested.getOrDefault(execution.amrIdentifier(), RequestedFields.empty()), policy));
+            // identifier and time are delivered for that execution. Default
+            // optional fields apply only to methods explicitly mentioned by
+            // the request expression.
+            result.add(requestedDetail(execution, requested.get(execution.amrIdentifier()), policy));
         }
         return List.copyOf(result);
     }
@@ -114,19 +115,37 @@ public final class AmrDetailsProjection {
         Map<String, Object> detail = baseDetail(execution);
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("time", execution.executionTime().toString());
-        fields.metadata().forEach(name -> {
-            if (policy.allows("amr_metadata." + name)) {
-                execution.metadataValue(name).ifPresent(value -> metadata.put(name, jsonValue(value)));
-            }
-        });
+        if (fields != null) {
+            fields.metadata().forEach(name -> {
+                if (policy.allows("amr_metadata." + name)) {
+                    execution.metadataValue(name).ifPresent(value -> metadata.put(name, jsonValue(value)));
+                }
+            });
+            execution.metadata().forEach((name, value) -> {
+                if (!"time".equals(name) && !metadata.containsKey(name)
+                        && policy.hasExplicitDefault("amr_metadata." + name)) {
+                    metadata.put(name, jsonValue(value));
+                }
+            });
+        }
         detail.put("amr_metadata", Map.copyOf(metadata));
 
         Map<String, Object> properties = new LinkedHashMap<>();
-        execution.properties().ifPresent(actual -> fields.properties().forEach(name -> {
-            if (policy.allows("amr_properties." + name) && actual.containsKey(name)) {
-                properties.put(name, jsonValue(actual.get(name)));
-            }
-        }));
+        if (fields != null) {
+            execution.properties().ifPresent(actual -> {
+                fields.properties().forEach(name -> {
+                    if (policy.allows("amr_properties." + name) && actual.containsKey(name)) {
+                        properties.put(name, jsonValue(actual.get(name)));
+                    }
+                });
+                actual.forEach((name, value) -> {
+                    if (!properties.containsKey(name)
+                            && policy.hasExplicitDefault("amr_properties." + name)) {
+                        properties.put(name, jsonValue(value));
+                    }
+                });
+            });
+        }
         if (!properties.isEmpty()) {
             detail.put("amr_properties", Map.copyOf(properties));
         }
@@ -144,10 +163,6 @@ public final class AmrDetailsProjection {
     }
 
     private record RequestedFields(Set<String> metadata, Set<String> properties) {
-
-        private static RequestedFields empty() {
-            return new RequestedFields(Set.of(), Set.of());
-        }
 
         private RequestedFields {
             metadata = Set.copyOf(metadata);

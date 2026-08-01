@@ -110,6 +110,17 @@ public final class OIDC4ACDisclosurePolicy {
         return mode(path) == DisclosureMode.DEFAULT;
     }
 
+    /**
+     * Returns whether an administrator explicitly selected "By default" for
+     * this field. An unset policy is permissive for an unconstrained claim,
+     * but it must not silently turn a constrained request into a request for
+     * every optional value.
+     */
+    public boolean hasExplicitDefault(String path) {
+        return mode(path) == DisclosureMode.DEFAULT
+                && (realmPolicy.hasExplicitDefault(path) || clientPolicy.hasExplicitDefault(path));
+    }
+
     public DisclosureMode mode(String path) {
         return mostRestrictive(realmPolicy.mode(path), clientPolicy.mode(path));
     }
@@ -217,6 +228,10 @@ public final class OIDC4ACDisclosurePolicy {
                 return DisclosureMode.NEVER;
             }
             return modes.getOrDefault(path.toLowerCase(Locale.ROOT), DisclosureMode.NEVER);
+        }
+
+        private boolean hasExplicitDefault(String path) {
+            return configured && !denyAll && modes.get(path.toLowerCase(Locale.ROOT)) == DisclosureMode.DEFAULT;
         }
     }
 }
