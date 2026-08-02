@@ -34,6 +34,7 @@ import jakarta.ws.rs.core.Response;
 
 import org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator;
 import org.keycloak.authentication.authenticators.conditional.ConditionalAuthenticator;
+import org.keycloak.authentication.authenticators.oidc4ac.OIDC4ACFactorPlannerAuthenticatorFactory;
 import org.keycloak.authentication.authenticators.util.AuthenticatorUtils;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticationFlowModel;
@@ -720,14 +721,15 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         // select the requested factors.
         boolean identityBootstrap = !plannedFactorExecution
                 && authUser == null
-                && "auth-username-form".equals(model.getAuthenticator());
+                && "auth-username-form".equals(model.getAuthenticator())
+                && isOidc4acFlowExecution(model);
         // An unplanned OIDC4AC container is the ordinary-login fallback. Keep
         // its configured first factor (pwd in the lab) instead of letting the
         // credential-order resolver replace it with a sibling such as OTP
         // merely because the username bootstrap has now resolved a user.
         boolean unplannedOidc4acFactor = !plannedFactorExecution
                 && "auth-username-password-form".equals(model.getAuthenticator())
-                && isOidc4acFactorExecution(model);
+                && isOidc4acFlowExecution(model);
         List<AuthenticationSelectionOption> selectionOptions = plannedFactorExecution || identityBootstrap
                 || unplannedOidc4acFactor
                 ? List.of()
@@ -812,12 +814,28 @@ public class DefaultAuthenticationFlow implements AuthenticationFlow {
         return AuthenticationSelectionResolver.createAuthenticationSelectionList(processor, model);
     }
 
-    private boolean isOidc4acFactorExecution(AuthenticationExecutionModel model) {
+    /**
+     * Returns whether an execution belongs to a flow configured for OIDC4AC.
+     *
+     * OIDC4AC factor flows use the {@code oidc4ac:} alias prefix, while the
+     * browser/forms container may have an arbitrary administrator-selected
+     * alias.  In the latter case the planner is a sibling execution in the
+     * containing flow, so checking only the alias would miss the request-aware
+     * browser flow.  Conversely, ordinary Keycloak flows have no planner and
+     * must retain the standard authentication-selection behavior.
+     */
+    private boolean isOidc4acFlowExecution(AuthenticationExecutionModel model) {
         AuthenticationExecutionModel current = model;
         while (current != null && current.getParentFlow() != null) {
             AuthenticationFlowModel parent = processor.getRealm().getAuthenticationFlowById(current.getParentFlow());
-            if (parent != null && parent.getAlias() != null && parent.getAlias().startsWith("oidc4ac:")) {
-                return true;
+            if (parent != null) {
+                if (parent.getAlias() != null && parent.getAlias().startsWith("oidc4ac:")) {
+                    return true;
+                }
+                if (processor.getRealm().getAuthenticationExecutionsStream(parent.getId())
+                        .anyMatch(execution -> OIDC4ACFactorPlannerAuthenticatorFactory.PROVIDER_ID.equals(execution.getAuthenticator()))) {
+                    return true;
+                }
             }
             current = processor.getRealm().getAuthenticationExecutionByFlowId(current.getParentFlow());
         }

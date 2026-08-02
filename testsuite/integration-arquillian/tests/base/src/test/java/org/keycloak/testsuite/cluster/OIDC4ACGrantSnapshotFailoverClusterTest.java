@@ -39,10 +39,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * node that issued the authorization is stopped. Run with the clustered
  * Quarkus profile, a shared non-H2 database, and two session-cache owners.
  */
-@EnableFeature(value = Profile.Feature.OIDC4AC, skipRestart = true)
 public class OIDC4ACGrantSnapshotFailoverClusterTest extends AbstractFailoverClusterTest {
 
     @Test
+    @EnableFeature(value = Profile.Feature.OIDC4AC, skipRestart = true)
     public void grantSnapshotSurvivesBackendFailover() throws IOException {
         oauth.client("test-app", "password");
         oauth.scope("openid offline_access");
