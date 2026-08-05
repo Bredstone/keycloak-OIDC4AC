@@ -28,7 +28,6 @@ import org.keycloak.util.JsonSerialization;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.openqa.selenium.Cookie;
 
 import static org.keycloak.testsuite.util.WaitUtils.pause;
 
@@ -85,9 +84,6 @@ public class OIDC4ACGrantSnapshotFailoverClusterTest extends AbstractFailoverClu
         UserInfo initialUserInfo = oauth.doUserInfoRequest(initial.getAccessToken()).getUserInfo();
         assertEquals(initialDetail, onlyAuthenticationDetail(initialUserInfo));
 
-        Cookie sessionCookie = driver.manage().getCookieNamed(KEYCLOAK_SESSION_COOKIE);
-        assertNotNull(sessionCookie);
-        setCurrentFailNodeForRoute(sessionCookie.getValue());
         failure();
         pause(REBALANCE_WAIT);
 
@@ -113,6 +109,10 @@ public class OIDC4ACGrantSnapshotFailoverClusterTest extends AbstractFailoverClu
         String encoded = URLEncoder.encode(JsonSerialization.writeValueAsString(claims), StandardCharsets.UTF_8);
         oauth.loginForm().param(OIDCLoginProtocol.CLAIMS_PARAM, encoded).open();
         loginPage.assertCurrent();
+        // AUTH_SESSION_ID is the routed cookie that identifies the backend which
+        // handled this authorization. KEYCLOAK_SESSION is only a hash and has no
+        // route information.
+        setCurrentFailNodeForRoute(AuthenticationSessionFailoverClusterTest.getAuthSessionCookieValue(driver));
         loginPage.login("test-user@localhost", "password");
         assertTrue(appPage.isCurrent());
         var authorizationResponse = oauth.parseLoginResponse();

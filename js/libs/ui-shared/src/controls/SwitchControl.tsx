@@ -17,6 +17,7 @@ export type SwitchControlProps<
 > = Omit<SwitchProps, "name" | "defaultValue" | "ref"> &
   UseControllerProps<any, P> & {
     name: string;
+    "data-testid"?: string;
     label?: string;
     labelIcon?: string | ReactNode;
     labelOn: string;
@@ -53,7 +54,7 @@ export const SwitchControl = <
           <Switch
             {...props}
             id={props.name}
-            data-testid={debeerify(props.name)}
+            data-testid={props["data-testid"] || debeerify(props.name)}
             label={labelOn}
             aria-label={props.label}
             isChecked={stringify ? value === "true" : value}
