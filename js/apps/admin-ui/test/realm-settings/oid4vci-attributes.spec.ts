@@ -270,15 +270,14 @@ test("should save signed metadata, encryption, and batch issuance settings", asy
     '[id="attributes.oid4vci🍺signed_metadata🍺alg"]',
   );
   await expect(signedMetadataAlgField).toBeVisible();
-  await selectItem(page, signedMetadataAlgField, "ES256");
 
   const requireRequestEncryptionSwitch = page.getByTestId(
-    "attributes.oid4vci.request.encryption.required",
+    "require-request-encryption-switch",
   );
   await requireRequestEncryptionSwitch.click({ force: true });
 
   const requireResponseEncryptionSwitch = page.getByTestId(
-    "attributes.oid4vci.response.encryption.required",
+    "require-response-encryption-switch",
   );
   await requireResponseEncryptionSwitch.click({ force: true });
 
@@ -287,6 +286,10 @@ test("should save signed metadata, encryption, and batch issuance settings", asy
   );
   const batchIssuanceInput = batchIssuanceField.locator("input");
   await batchIssuanceInput.fill("5");
+
+  // Select the algorithm after the switches so the open PatternFly menu cannot
+  // intercept the forced click on a switch below it.
+  await selectItem(page, signedMetadataAlgField, "ES256");
 
   await page.getByTestId("tokens-tab-save").click();
   await expect(
@@ -375,13 +378,11 @@ test("should save Deflate Compression setting", async ({ page }) => {
   await oid4vciJumpLink.click();
 
   const requestEncryptionSwitch = page.getByTestId(
-    "attributes.oid4vci.request.encryption.required",
+    "require-request-encryption-switch",
   );
   await requestEncryptionSwitch.click({ force: true });
 
-  const deflateSwitch = page.getByTestId(
-    "attributes.oid4vci.request.zip.algorithms",
-  );
+  const deflateSwitch = page.getByTestId("deflate-compression-switch");
   await deflateSwitch.click({ force: true });
 
   await page.getByTestId("tokens-tab-save").click();
