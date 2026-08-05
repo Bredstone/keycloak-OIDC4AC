@@ -13,6 +13,7 @@ package org.keycloak.testsuite.cluster;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -20,10 +21,12 @@ import org.keycloak.common.Profile;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.UserInfo;
-import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
+import org.keycloak.testsuite.arquillian.ContainerInfo;
 import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.util.JsonSerialization;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.openqa.selenium.Cookie;
 
@@ -41,8 +44,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class OIDC4ACGrantSnapshotFailoverClusterTest extends AbstractFailoverClusterTest {
 
+    private final Map<ContainerInfo, Boolean> oidc4acState = new HashMap<>();
+
+    @Before
+    public void enableOidc4acOnEveryBackend() {
+        for (ContainerInfo backend : suiteContext.getAuthServerBackendsInfo()) {
+            var testingClient = getTestingClientFor(backend);
+            boolean enabled = !testingClient.testing().listDisabledFeatures()
+                    .contains(Profile.Feature.OIDC4AC);
+            oidc4acState.put(backend, enabled);
+            if (!enabled) {
+                testingClient.enableFeature(Profile.Feature.OIDC4AC);
+            }
+        }
+    }
+
+    @After
+    public void restoreOidc4acOnEveryBackend() {
+        for (ContainerInfo backend : suiteContext.getAuthServerBackendsInfo()) {
+            if (!oidc4acState.getOrDefault(backend, true)
+                    && controller.isStarted(backend.getQualifier())) {
+                getTestingClientFor(backend).disableFeature(Profile.Feature.OIDC4AC);
+            }
+        }
+        oidc4acState.clear();
+    }
+
     @Test
-    @EnableFeature(value = Profile.Feature.OIDC4AC, skipRestart = true)
     public void grantSnapshotSurvivesBackendFailover() throws IOException {
         oauth.client("test-app", "password");
         oauth.scope("openid offline_access");

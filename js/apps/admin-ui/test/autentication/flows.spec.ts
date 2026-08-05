@@ -55,7 +55,7 @@ test.describe("Authentication flows", () => {
       }),
     ).toBeVisible();
     await expect(page.getByText("Authentication planner status")).toBeVisible();
-    await expect(page.getByText("Realm disclosure policy")).toBeVisible();
+    await expect(page.getByText("Optional metadata")).toBeVisible();
     await expect(page.getByText("Informational disclosure only")).toBeVisible();
     await expect(page.locator("select")).toHaveCount(0);
   });
@@ -70,7 +70,7 @@ test.describe("Authentication flows", () => {
     });
 
     await expect(page.getByTestId("oidc4ac-enabled")).toBeChecked();
-    await expect(page.getByText("Enable OIDC4AC for this realm")).toBeVisible();
+    await expect(page.getByText("Enable OIDC4AC")).toBeVisible();
   });
 
   test("hides OIDC4AC settings when the realm switch is disabled", async ({
