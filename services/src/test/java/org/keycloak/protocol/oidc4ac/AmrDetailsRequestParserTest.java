@@ -80,6 +80,8 @@ public class AmrDetailsRequestParserTest {
         assertInvalid("{\"id_token\":{\"amr_details\":{\"amr_identifier\":{\"value\":\"pwd\"},\"amr_properties\":{\"x\":{\"value\":1,\"values\":[2]}}}}}");
         assertInvalid("{\"id_token\":{\"amr_details\":{\"amr_identifier\":{\"value\":\"pwd\"},\"amr_metadata\":{\"iss\":{\"max_age\":10}}}}}");
         assertInvalid("{\"id_token\":{\"amr_details\":{\"amr_metadata\":{}}}}");
+        assertInvalid("{\"id_token\":{\"amr_details\":{\"amr_identifier\":{\"value\":\"pwd\"},\"amr_metadata\":{}}}}");
+        assertInvalid("{\"id_token\":{\"amr_details\":{\"amr_identifier\":{\"value\":\"pwd\"},\"amr_properties\":{}}}}");
     }
 
     @Test
@@ -94,6 +96,23 @@ public class AmrDetailsRequestParserTest {
         AuthenticationEvent event = new AuthenticationEvent(java.util.List.of(
                 execution("pwd", NOW.minusSeconds(10), Map.of(), Optional.empty()),
                 execution("otp", NOW.minusSeconds(5), Map.of(), Optional.of(Map.of("otp_algorithm", text("TOTP"))))));
+
+        AmrDetailsRequirementsEvaluator evaluator = new AmrDetailsRequirementsEvaluator(Clock.fixed(NOW, ZoneOffset.UTC));
+        assertTrue(evaluator.evaluate(request, Optional.of(event)).satisfies(request.essential(), true));
+    }
+
+    @Test
+    public void acceptsMethodExpressionsWithoutMetadataConstraints() throws Exception {
+        AmrDetailsClaimRequest request = AmrDetailsRequestParser.parseClaimsParameter("""
+                {"id_token":{"amr_details":{"essential":true,"all_of":[
+                  {"amr_identifier":{"value":"pop"}},
+                  {"one_of":[{"amr_identifier":{"value":"otp"}},{"amr_identifier":{"value":"email"}}]}
+                ]}}}
+                """).idToken().orElseThrow();
+
+        AuthenticationEvent event = new AuthenticationEvent(java.util.List.of(
+                execution("otp", NOW.minusSeconds(10), Map.of(), Optional.empty()),
+                execution("pop", NOW.minusSeconds(5), Map.of(), Optional.empty())));
 
         AmrDetailsRequirementsEvaluator evaluator = new AmrDetailsRequirementsEvaluator(Clock.fixed(NOW, ZoneOffset.UTC));
         assertTrue(evaluator.evaluate(request, Optional.of(event)).satisfies(request.essential(), true));

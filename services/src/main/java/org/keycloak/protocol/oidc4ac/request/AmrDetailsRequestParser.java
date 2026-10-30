@@ -142,12 +142,8 @@ public final class AmrDetailsRequestParser {
         if (!object.has("amr_identifier")) {
             throw new AmrDetailsRequestException("A method expression requires amr_identifier");
         }
-        JsonNode metadataNode = object.get("amr_metadata");
-        if (metadataNode == null || !metadataNode.isObject() || !metadataNode.has("time")) {
-            throw new AmrDetailsRequestException("A method expression requires amr_metadata.time");
-        }
         return new MethodExpression(parseIdentifierConstraint(object.get("amr_identifier")),
-                parseConstraintObject(metadataNode, true), parseConstraintObject(object.get("amr_properties"), false));
+                parseConstraintObject(object.get("amr_metadata"), true), parseConstraintObject(object.get("amr_properties"), false));
     }
 
     private static IdentifierConstraint parseIdentifierConstraint(JsonNode node) throws AmrDetailsRequestException {
@@ -188,8 +184,8 @@ public final class AmrDetailsRequestParser {
         if (node == null) {
             return java.util.Map.of();
         }
-        if (!node.isObject()) {
-            throw new AmrDetailsRequestException((metadata ? "amr_metadata" : "amr_properties") + " must be an object");
+        if (!node.isObject() || node.isEmpty()) {
+            throw new AmrDetailsRequestException((metadata ? "amr_metadata" : "amr_properties") + " must be a non-empty object");
         }
         java.util.Map<String, ValueConstraint> constraints = new java.util.LinkedHashMap<>();
         Iterator<java.util.Map.Entry<String, JsonNode>> fields = node.fields();
