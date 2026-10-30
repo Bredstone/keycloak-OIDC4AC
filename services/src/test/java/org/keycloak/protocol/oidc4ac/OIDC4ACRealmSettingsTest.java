@@ -11,7 +11,10 @@
 package org.keycloak.protocol.oidc4ac;
 
 import java.lang.reflect.Proxy;
+import java.util.stream.Stream;
 
+import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticationFlowModel;
 import org.keycloak.models.RealmModel;
 
 import org.junit.Test;
@@ -32,6 +35,29 @@ public class OIDC4ACRealmSettingsTest {
     public void honorsExplicitRealmSwitch() {
         assertFalse(OIDC4ACRealmSettings.isEnabled(realmWithAttribute("false")));
         assertTrue(OIDC4ACRealmSettings.isEnabled(realmWithAttribute("true")));
+    }
+
+    @Test
+    public void requestProcessingRequiresAnEnabledPlanner() {
+        assertTrue(OIDC4ACRealmSettings.isRequestProcessingSupported(realmWithBrowserFlow(null, "oidc4ac-factor-planner")));
+        assertFalse(OIDC4ACRealmSettings.isRequestProcessingSupported(realmWithBrowserFlow(null, "auth-username-password-form")));
+        assertFalse(OIDC4ACRealmSettings.isRequestProcessingSupported(realmWithBrowserFlow("false", "oidc4ac-factor-planner")));
+    }
+
+    private static RealmModel realmWithBrowserFlow(String enabled, String authenticator) {
+        AuthenticationFlowModel flow = new AuthenticationFlowModel();
+        flow.setId("browser");
+        AuthenticationExecutionModel execution = new AuthenticationExecutionModel();
+        execution.setAuthenticator(authenticator);
+        execution.setRequirement(AuthenticationExecutionModel.Requirement.REQUIRED);
+        return (RealmModel) Proxy.newProxyInstance(RealmModel.class.getClassLoader(), new Class<?>[] { RealmModel.class },
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getAttribute" -> enabled;
+                    case "getBrowserFlow" -> flow;
+                    case "getAuthenticationExecutionsStream" -> Stream.of(execution);
+                    case "toString" -> "realm";
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     private static RealmModel realmWithAttribute(String value) {

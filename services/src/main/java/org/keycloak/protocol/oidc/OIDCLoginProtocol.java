@@ -361,7 +361,7 @@ public class OIDCLoginProtocol implements LoginProtocol {
     private boolean hasUnmetEssentialAuthenticationRequirements(AuthenticationSessionModel authSession,
             ClientSessionContext clientSessionContext) {
         if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)
-                || !org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isEnabled(realm)) {
+                || !org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isRequestProcessingSupported(realm)) {
             return false;
         }
         try {
@@ -581,7 +581,7 @@ public class OIDCLoginProtocol implements LoginProtocol {
             return true;
         }
         if (!org.keycloak.common.Profile.isFeatureEnabled(org.keycloak.common.Profile.Feature.OIDC4AC)
-                || !org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isEnabled(realm)) {
+                || !org.keycloak.protocol.oidc4ac.OIDC4ACRealmSettings.isRequestProcessingSupported(realm)) {
             return false;
         }
         if (userSession == null) {

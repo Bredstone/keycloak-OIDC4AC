@@ -113,7 +113,7 @@ public final class OIDC4ACDiscoveryMetadata {
         }
     }
 
-    static boolean hasEnabledPlanner(RealmModel realm) {
+    public static boolean hasEnabledPlanner(RealmModel realm) {
         AuthenticationFlowModel browserFlow = realm.getBrowserFlow();
         return browserFlow != null && hasEnabledPlanner(realm, browserFlow);
     }

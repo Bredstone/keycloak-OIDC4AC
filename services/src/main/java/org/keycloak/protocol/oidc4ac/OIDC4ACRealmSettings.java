@@ -11,6 +11,7 @@
 package org.keycloak.protocol.oidc4ac;
 
 import org.keycloak.models.RealmModel;
+import org.keycloak.protocol.oidc4ac.discovery.OIDC4ACDiscoveryMetadata;
 
 /** Realm-scoped switches for the experimental OIDC4AC feature. */
 public final class OIDC4ACRealmSettings {
@@ -32,5 +33,14 @@ public final class OIDC4ACRealmSettings {
         }
         String value = realm.getAttribute(ENABLED_ATTRIBUTE);
         return value == null || Boolean.parseBoolean(value);
+    }
+
+    /**
+     * Request-processing support requires an enabled factor planner, the same
+     * condition advertised as amr_details_request_supported. Without it the
+     * realm offers informational support only and ignores request expressions.
+     */
+    public static boolean isRequestProcessingSupported(RealmModel realm) {
+        return isEnabled(realm) && (realm == null || OIDC4ACDiscoveryMetadata.hasEnabledPlanner(realm));
     }
 }

@@ -40,7 +40,8 @@ public class OIDC4ACAuthorizationCheckProvider implements AuthorizationEndpointC
         }
         try {
             var requests = AmrDetailsRequestParser.parseClaimsParameter(context.getAuthorizationEndpointRequest().getClaims());
-            if (!OIDC4ACDisclosurePolicy.forModels(context.getRealm(), context.getClient())
+            if (OIDC4ACRealmSettings.isRequestProcessingSupported(context.getRealm())
+                    && !OIDC4ACDisclosurePolicy.forModels(context.getRealm(), context.getClient())
                     .essentialRequestsRepresentable(requests)) {
                 throw new AuthorizationCheckException(Response.Status.BAD_REQUEST,
                         org.keycloak.protocol.oidc4ac.OIDC4ACConstants.UNMET_AUTHENTICATION_REQUIREMENTS,
